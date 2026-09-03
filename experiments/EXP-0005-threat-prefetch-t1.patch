@@ -1,0 +1,12 @@
+diff --git a/src/nnue/features/full_threats.cpp b/src/nnue/features/full_threats.cpp
+--- a/src/nnue/features/full_threats.cpp
++++ b/src/nnue/features/full_threats.cpp
+@@ -328,7 +328,7 @@ void FullThreats::append_changed_indices(Color                   perspective,
+         if (index < Dimensions)
+         {
+             if (prefetchBase)
+-                prefetch<PrefetchRw::READ, PrefetchLoc::LOW>(
++                prefetch<PrefetchRw::READ, PrefetchLoc::MODERATE>(
+                   prefetchBase + static_cast<std::ptrdiff_t>(index) * prefetchStride);
+             insert.push_back(index);
+         }
