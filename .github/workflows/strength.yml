@@ -27,8 +27,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
           git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
-          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/cutechess-build --target cutechess-cli -j2
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          # Cute Chess' CMake target is named `cli`; its OUTPUT_NAME is
+          # `cutechess-cli`.  Building a target named cutechess-cli fails.
+          cmake --build /tmp/cutechess-build --target cli -j2
+          test -x /tmp/cutechess-build/cutechess-cli
           install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
           /tmp/cutechess-cli --version || /tmp/cutechess-cli -version || true
           git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
