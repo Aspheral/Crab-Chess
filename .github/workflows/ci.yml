@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Crab
-        run: make -C engine/src -j2 build ARCH=x86-64 COMP=${{ matrix.comp }}
+        run: make -j2 build ARCH=x86-64 COMP=${{ matrix.comp }}
 
       - name: UCI identity and handshake
         run: |
@@ -34,16 +34,16 @@ jobs:
           grep -q '^uciok$' /tmp/crab-uci.txt
           grep -q '^readyok$' /tmp/crab-uci.txt
 
-      - name: Deterministic bench smoke
+      - name: Deterministic bench gate
         run: |
           ./engine/src/crab bench 2>&1 | tee /tmp/crab-bench.txt
-          grep -q 'Nodes searched' /tmp/crab-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-bench.txt
           grep -q 'Nodes/second' /tmp/crab-bench.txt
 
       - name: Clean generated artifacts
         if: always()
         run: |
-          make -C engine/src clean || true
+          make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   sanitizers:
@@ -52,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build with address + undefined sanitizers
-        run: make -C engine/src -j2 build ARCH=x86-64 sanitize='address undefined' debug=yes
+        run: make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
       - name: UCI sanitizer smoke
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
@@ -61,7 +61,7 @@ jobs:
       - name: Clean generated artifacts
         if: always()
         run: |
-          make -C engine/src clean || true
+          make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   web:
