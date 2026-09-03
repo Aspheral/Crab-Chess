@@ -1,0 +1,88 @@
+name: EXP-0005 Reproduction
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    if: ${{ github.head_ref == 'exp/0005-threat-prefetch-t1' }}
+    name: Fresh-runner paired Clang AVX2 NPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record immutable provenance
+        run: |
+          {
+            echo "candidate_branch_sha=${{ github.event.pull_request.head.sha }}"
+            echo "workflow_checkout_sha=${{ github.sha }}"
+            echo "accepted_crab_baseline=ff6e025c221b294a2ca243892f43a033003c7463"
+            echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+            echo "sf18_official_bench=2050811"
+            echo "threads=1"
+            echo "hash_mib=16"
+            echo "arch=x86-64-avx2"
+            echo "pairs=20"
+            echo "warmups=2"
+            clang++ --version
+            lscpu
+            sha256sum experiments/EXP-0005-threat-prefetch-t1.patch
+          } | tee /tmp/exp0005-repro-provenance.txt
+
+      - name: Verify candidate patch
+        run: git apply --check --directory=engine experiments/EXP-0005-threat-prefetch-t1.patch
+
+      - name: Build accepted Crab control and record networks
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0005-repro-baseline
+          sha256sum /tmp/crab-exp0005-repro-baseline | tee -a /tmp/exp0005-repro-provenance.txt
+          sha256sum engine/src/nn-c288c895ea92.nnue engine/src/nn-37f18f62d772.nnue | tee -a /tmp/exp0005-repro-provenance.txt
+          /tmp/crab-exp0005-repro-baseline bench 2>&1 | tee /tmp/exp0005-repro-baseline-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/exp0005-repro-baseline-bench.txt
+
+      - name: Apply candidate and build
+        run: |
+          git apply --directory=engine experiments/EXP-0005-threat-prefetch-t1.patch
+          git diff -- engine/src/nnue/features/full_threats.cpp | sha256sum | tee -a /tmp/exp0005-repro-provenance.txt
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0005-repro-candidate
+          sha256sum /tmp/crab-exp0005-repro-candidate | tee -a /tmp/exp0005-repro-provenance.txt
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0005-repro-candidate | tee /tmp/exp0005-repro-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/exp0005-repro-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/exp0005-repro-uci.txt
+          /tmp/crab-exp0005-repro-candidate bench 2>&1 | tee /tmp/exp0005-repro-candidate-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/exp0005-repro-candidate-bench.txt
+
+      - name: Run independent paired throughput reproduction
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0005-repro-baseline \
+            /tmp/crab-exp0005-repro-candidate \
+            --pairs 20 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0005-reproduction.json
+          cat /tmp/exp0005-reproduction.json
+
+      - name: Upload reproduction evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0005-reproduction-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/exp0005-reproduction.json
+            /tmp/exp0005-repro-provenance.txt
+            /tmp/exp0005-repro-baseline-bench.txt
+            /tmp/exp0005-repro-candidate-bench.txt
+            /tmp/exp0005-repro-uci.txt
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
