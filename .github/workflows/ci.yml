@@ -46,6 +46,48 @@ jobs:
           make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
+  exp0001:
+    name: EXP-0001 paired Clang NPS
+    if: github.event_name == 'pull_request' && github.head_ref == 'exp/0001-clang-inline-threshold'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build control
+        run: |
+          make clean
+          make -j2 baseline-build ARCH=x86-64 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0001-baseline
+
+      - name: Build candidate
+        run: |
+          make clean
+          make -j2 candidate-build ARCH=x86-64 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0001-candidate
+
+      - name: Run paired throughput benchmark
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0001-baseline \
+            /tmp/crab-exp0001-candidate \
+            --pairs 6 \
+            --warmups 1 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0001.json
+          cat /tmp/exp0001.json
+
+      - name: Upload experiment result
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0001-clang-inline-nps
+          path: /tmp/exp0001.json
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
   sanitizers:
     name: Sanitizers
     runs-on: ubuntu-latest
