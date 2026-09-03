@@ -22,11 +22,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install match runner
+      - name: Build pinned match runner
         run: |
           sudo apt-get update
-          sudo apt-get install -y cutechess
-          cutechess-cli --version || true
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/cutechess-build --target cutechess-cli -j2
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          /tmp/cutechess-cli --version || /tmp/cutechess-cli -version || true
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
 
       - name: Record host and compiler
         run: |
@@ -69,7 +74,7 @@ jobs:
 
       - name: Candidate vs accepted Crab baseline
         run: |
-          cutechess-cli \
+          /tmp/cutechess-cli \
             -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
             -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci \
             -each tc=3+0.03 option.Threads=1 option.Hash=64 \
@@ -81,7 +86,7 @@ jobs:
 
       - name: Candidate vs immutable SF18
         run: |
-          cutechess-cli \
+          /tmp/cutechess-cli \
             -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
             -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
             -each tc=3+0.03 option.Threads=1 option.Hash=64 \
@@ -95,7 +100,7 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
-          import hashlib,json,os,pathlib,subprocess
+          import json,pathlib
           def read(p):
               q=pathlib.Path(p)
               return q.read_text().strip() if q.exists() else None
@@ -109,6 +114,8 @@ jobs:
             'games_per_match_planned':256,
             'opening_order':'sequential, 8 plies, repeated colors',
             'adjudication':'none',
+            'match_runner':'Cute Chess v1.3.1',
+            'match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),
             'compiler':read('/tmp/compiler.txt'),
             'host':read('/tmp/host.txt'),
             'network_checksums':read('/tmp/network-sha256.txt'),
@@ -133,3 +140,4 @@ jobs:
             /tmp/sf18-bench.txt
             /tmp/network-sha256.txt
             /tmp/openings-sha256.txt
+            /tmp/cutechess-runner-sha.txt
