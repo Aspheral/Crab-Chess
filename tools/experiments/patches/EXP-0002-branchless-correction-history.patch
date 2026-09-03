@@ -1,5 +1,4 @@
 diff --git a/engine/src/search.cpp b/engine/src/search.cpp
-index b2cce12..0000000 100644
 --- a/engine/src/search.cpp
 +++ b/engine/src/search.cpp
 @@ -114,13 +114,14 @@ void update_correction_history(const Position& pos,
@@ -25,7 +24,6 @@ index b2cce12..0000000 100644
  
  // Add a small random component to draw evaluations to avoid 3-fold blindness
 diff --git a/engine/src/types.h b/engine/src/types.h
-index 9e686ae..0000000 100644
 --- a/engine/src/types.h
 +++ b/engine/src/types.h
 @@ -447,6 +447,10 @@ class Move {
