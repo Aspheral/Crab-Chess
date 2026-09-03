@@ -15,48 +15,54 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            comp: gcc
+          - compiler: clang
+            comp: clang
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select GCC
-        if: matrix.compiler == 'gcc'
+      - name: Build Crab
+        run: make -C engine/src -j2 build ARCH=x86-64 COMP=${{ matrix.comp }}
+
+      - name: UCI identity and handshake
         run: |
-          echo "CC=gcc" >> "$GITHUB_ENV"
-          echo "CXX=g++" >> "$GITHUB_ENV"
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/crab-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/crab-uci.txt
+          grep -q '^uciok$' /tmp/crab-uci.txt
+          grep -q '^readyok$' /tmp/crab-uci.txt
 
-      - name: Select Clang
-        if: matrix.compiler == 'clang'
+      - name: Deterministic bench smoke
         run: |
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXX=clang++" >> "$GITHUB_ENV"
+          ./engine/src/crab bench 2>&1 | tee /tmp/crab-bench.txt
+          grep -q 'Nodes searched' /tmp/crab-bench.txt
+          grep -q 'Nodes/second' /tmp/crab-bench.txt
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --parallel 2
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
-      - name: UCI handshake
-        run: printf 'uci\nisready\nquit\n' | ./build/crab | tee /tmp/crab-uci.txt && grep -q 'uciok' /tmp/crab-uci.txt && grep -q 'readyok' /tmp/crab-uci.txt
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make -C engine/src clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   sanitizers:
-    name: ASan + UBSan
+    name: Sanitizers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DCRAB_ENABLE_SANITIZERS=ON
-      - name: Build
-        run: cmake --build build-sanitize --parallel 2
-      - name: Test
+      - name: Build with address + undefined sanitizers
+        run: make -C engine/src -j2 build ARCH=x86-64 sanitize='address undefined' debug=yes
+      - name: UCI sanitizer smoke
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-sanitize --output-on-failure
+        run: printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make -C engine/src clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   web:
     name: Web smoke
