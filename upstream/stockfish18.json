@@ -1,0 +1,9 @@
+{
+  "upstream_repository": "official-stockfish/Stockfish",
+  "release_tag": "sf_18",
+  "commit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+  "tree": "a416dabd4bd16caf1908d520ea45971fb509dc5f",
+  "official_bench": 2050811,
+  "release_date": "2026-01-31",
+  "license": "GPL-3.0"
+}

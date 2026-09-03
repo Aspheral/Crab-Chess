@@ -16,28 +16,27 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <iostream>
-#include <memory>
+#ifndef BENCHMARK_H_INCLUDED
+#define BENCHMARK_H_INCLUDED
 
-#include "bitboard.h"
-#include "misc.h"
-#include "position.h"
-#include "tune.h"
-#include "uci.h"
+#include <iosfwd>
+#include <string>
+#include <vector>
 
-using namespace Crab;
+namespace Crab::Benchmark {
 
-int main(int argc, char* argv[]) {
-    std::cout << engine_info() << std::endl;
+std::vector<std::string> setup_bench(const std::string&, std::istream&);
 
-    Bitboards::init();
-    Position::init();
+struct BenchmarkSetup {
+    int                      ttSize;
+    int                      threads;
+    std::vector<std::string> commands;
+    std::string              originalInvocation;
+    std::string              filledInvocation;
+};
 
-    auto uci = std::make_unique<UCIEngine>(argc, argv);
+BenchmarkSetup setup_benchmark(std::istream&);
 
-    Tune::init(uci->engine_options());
+}  // namespace Crab
 
-    uci->loop();
-
-    return 0;
-}
+#endif  // #ifndef BENCHMARK_H_INCLUDED
