@@ -1,0 +1,41 @@
+diff --git a/engine/src/search.cpp b/engine/src/search.cpp
+index b2cce12..0000000 100644
+--- a/engine/src/search.cpp
++++ b/engine/src/search.cpp
+@@ -114,13 +114,14 @@ void update_correction_history(const Position& pos,
+     shared.nonpawn_correction_entry<WHITE>(pos).at(us).nonPawnWhite << bonus * nonPawnWeight / 128;
+     shared.nonpawn_correction_entry<BLACK>(pos).at(us).nonPawnBlack << bonus * nonPawnWeight / 128;
+ 
+-    if (m.is_ok())
+-    {
+-        const Square to = m.to_sq();
+-        const Piece  pc = pos.piece_on(m.to_sq());
+-        (*(ss - 2)->continuationCorrectionHistory)[pc][to] << bonus * 127 / 128;
+-        (*(ss - 4)->continuationCorrectionHistory)[pc][to] << bonus * 59 / 128;
+-    }
++    // Branchless: use a mask to zero the update when the previous move is invalid.
++    const int    mask   = int(m.is_ok());
++    const Square to     = m.to_sq_unchecked();
++    const Piece  pc     = pos.piece_on(to);
++    const int    bonus2 = (bonus * 127 / 128) * mask;
++    const int    bonus4 = (bonus * 59 / 128) * mask;
++    (*(ss - 2)->continuationCorrectionHistory)[pc][to] << bonus2;
++    (*(ss - 4)->continuationCorrectionHistory)[pc][to] << bonus4;
+ }
+ 
+ // Add a small random component to draw evaluations to avoid 3-fold blindness
+diff --git a/engine/src/types.h b/engine/src/types.h
+index 9e686ae..0000000 100644
+--- a/engine/src/types.h
++++ b/engine/src/types.h
+@@ -447,6 +447,10 @@ class Move {
+         return Square(data & 0x3F);
+     }
+ 
++    // Same as to_sq(), but intentionally skips the validity assertion for
++    // branchless paths whose result is masked when the move is not valid.
++    constexpr Square to_sq_unchecked() const { return Square(data & 0x3F); }
++
+     constexpr MoveType type_of() const { return MoveType(data & (3 << 14)); }
+ 
+     constexpr PieceType promotion_type() const { return PieceType(((data >> 12) & 3) + KNIGHT); }
