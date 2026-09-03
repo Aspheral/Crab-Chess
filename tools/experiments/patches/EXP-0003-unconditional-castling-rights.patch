@@ -1,7 +1,7 @@
 diff --git a/engine/src/position.cpp b/engine/src/position.cpp
 --- a/engine/src/position.cpp
 +++ b/engine/src/position.cpp
-@@ -812,13 +812,10 @@ void Position::do_move(Move                      m,
+@@ -812,13 +812,11 @@ void Position::do_move(Move                      m,
          st->epSquare = SQ_NONE;
      }
  
