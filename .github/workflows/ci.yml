@@ -64,6 +64,69 @@ jobs:
           make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
+  exp0003:
+    name: EXP-0003 paired Clang AVX2 NPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record benchmark environment
+        run: |
+          clang++ --version
+          lscpu
+
+      - name: Verify candidate patch
+        run: git apply --check experiments/EXP-0003-nnue-sf-assume.patch
+
+      - name: Build control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0003-baseline
+
+      - name: Apply candidate and build
+        run: |
+          git apply experiments/EXP-0003-nnue-sf-assume.patch
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0003-candidate
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0003-candidate | tee /tmp/crab-exp0003-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-exp0003-uci.txt
+          /tmp/crab-exp0003-candidate bench 2>&1 | tee /tmp/crab-exp0003-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-exp0003-bench.txt
+
+      - name: Run paired throughput benchmark
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0003-baseline \
+            /tmp/crab-exp0003-candidate \
+            --pairs 10 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0003.json
+          cat /tmp/exp0003.json
+
+      - name: Candidate sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+
+      - name: Upload experiment result
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0003-nnue-sf-assume-nps
+          path: /tmp/exp0003.json
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
   web:
     name: Web smoke
     runs-on: ubuntu-latest
