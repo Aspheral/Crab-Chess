@@ -128,6 +128,80 @@ jobs:
           make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
+  exp0005:
+    if: ${{ github.head_ref == 'exp/0005-threat-prefetch-t1' }}
+    name: EXP-0005 paired Clang AVX2 NPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record experiment provenance
+        run: |
+          echo "candidate_branch_sha=${GITHUB_HEAD_SHA}" | tee /tmp/exp0005-provenance.txt
+          echo "accepted_crab_baseline=ff6e025c221b294a2ca243892f43a033003c7463" | tee -a /tmp/exp0005-provenance.txt
+          echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c" | tee -a /tmp/exp0005-provenance.txt
+          clang++ --version | tee -a /tmp/exp0005-provenance.txt
+          lscpu | tee -a /tmp/exp0005-provenance.txt
+          sha256sum experiments/EXP-0005-threat-prefetch-t1.patch | tee -a /tmp/exp0005-provenance.txt
+
+      - name: Verify candidate patch
+        run: git apply --check --directory=engine experiments/EXP-0005-threat-prefetch-t1.patch
+
+      - name: Build accepted Crab control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0005-baseline
+          sha256sum /tmp/crab-exp0005-baseline | tee -a /tmp/exp0005-provenance.txt
+
+      - name: Apply candidate and build
+        run: |
+          git apply --directory=engine experiments/EXP-0005-threat-prefetch-t1.patch
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0005-candidate
+          sha256sum /tmp/crab-exp0005-candidate | tee -a /tmp/exp0005-provenance.txt
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0005-candidate | tee /tmp/crab-exp0005-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-exp0005-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/crab-exp0005-uci.txt
+          /tmp/crab-exp0005-candidate bench 2>&1 | tee /tmp/crab-exp0005-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-exp0005-bench.txt
+
+      - name: Run paired throughput benchmark
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0005-baseline \
+            /tmp/crab-exp0005-candidate \
+            --pairs 20 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0005.json
+          cat /tmp/exp0005.json
+
+      - name: Candidate sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+
+      - name: Upload experiment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0005-threat-prefetch-t1
+          path: |
+            /tmp/exp0005.json
+            /tmp/exp0005-provenance.txt
+            /tmp/crab-exp0005-bench.txt
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
   web:
     name: Web smoke
     runs-on: ubuntu-latest
