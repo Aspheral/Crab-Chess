@@ -43,6 +43,24 @@ jobs:
       - name: UCI handshake
         run: printf 'uci\nisready\nquit\n' | ./build/crab | tee /tmp/crab-uci.txt && grep -q 'uciok' /tmp/crab-uci.txt && grep -q 'readyok' /tmp/crab-uci.txt
 
+  sf18-baseline:
+    name: Verify immutable SF18 baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag, commit, build, bench, and NNUE checksums
+        env:
+          CRAB_BUILD_JOBS: 2
+          CRAB_SF18_ARCH: x86-64
+        run: bash scripts/verify_sf18_baseline.sh
+      - name: Upload baseline audit record
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf18-baseline-verification
+          path: |
+            .crab/upstream/sf18/CRAB_BASELINE_VERIFICATION.txt
+            .crab/upstream/sf18/CRAB_NETWORK_SHA256.txt
+
   sanitizers:
     name: ASan + UBSan
     runs-on: ubuntu-latest
