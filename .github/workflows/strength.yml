@@ -16,7 +16,7 @@ jobs:
   exp0004-strength:
     name: EXP-0004 matched games
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +29,7 @@ jobs:
           git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
           cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
           # Cute Chess' CMake target is named `cli`; its OUTPUT_NAME is
-          # `cutechess-cli`.  Building a target named cutechess-cli fails.
+          # `cutechess-cli`. Building a target named cutechess-cli fails.
           cmake --build /tmp/cutechess-build --target cli -j2
           test -x /tmp/cutechess-build/cutechess-cli
           install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
@@ -82,7 +82,7 @@ jobs:
             -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci \
             -each tc=3+0.03 option.Threads=1 option.Hash=64 \
             -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 128 -repeat -concurrency 2 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
             -pgnout /tmp/candidate-vs-crab.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn \
             --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
@@ -94,7 +94,7 @@ jobs:
             -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
             -each tc=3+0.03 option.Threads=1 option.Hash=64 \
             -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 128 -repeat -concurrency 2 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
             -pgnout /tmp/candidate-vs-sf18.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn \
             --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
@@ -114,7 +114,7 @@ jobs:
             'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
             'official_bench_nodes':2050811,
             'threads':1,'hash_mb':64,'time_control':'3+0.03','concurrency':2,
-            'games_per_match_planned':256,
+            'games_per_match_planned':512,
             'opening_order':'sequential, 8 plies, repeated colors',
             'adjudication':'none',
             'match_runner':'Cute Chess v1.3.1',
@@ -132,7 +132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exp0004-strength-screen
+          name: exp0004-strength-confirmation
           path: |
             /tmp/audit.json
             /tmp/candidate-vs-crab.json
