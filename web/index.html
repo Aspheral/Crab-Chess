@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f12" />
+  <title>Crab Chess</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ENGINE LAB / PLAYGROUND</p>
+        <h1>Crab Chess</h1>
+      </div>
+      <div class="engine-pill" aria-label="Engine status">
+        <span class="status-dot"></span>
+        <span>Web board online</span>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="Chess workspace">
+      <div class="board-column">
+        <div class="player-row top-player">
+          <div>
+            <strong id="top-player-name">Black</strong>
+            <span class="muted">Local</span>
+          </div>
+          <div class="clock" aria-label="Black clock">∞</div>
+        </div>
+
+        <div id="board" class="board-wrap" role="grid" aria-label="Chess board"></div>
+
+        <div class="player-row bottom-player">
+          <div>
+            <strong id="bottom-player-name">White</strong>
+            <span class="muted">Local</span>
+          </div>
+          <div class="clock" aria-label="White clock">∞</div>
+        </div>
+      </div>
+
+      <aside class="side-panel">
+        <div class="panel-card hero-card">
+          <span class="panel-kicker">CURRENT POSITION</span>
+          <div class="status-line">
+            <h2 id="game-status">White to move</h2>
+            <span id="ply-count" class="badge">0 ply</span>
+          </div>
+          <p id="sub-status" class="muted">Local two-player game. Crab engine hookup comes next.</p>
+        </div>
+
+        <div class="panel-card move-card">
+          <div class="panel-heading">
+            <span class="panel-kicker">MOVES</span>
+            <button id="copy-pgn" class="text-button" type="button">Copy PGN</button>
+          </div>
+          <ol id="move-list" class="move-list" aria-live="polite"></ol>
+        </div>
+
+        <div class="panel-card controls-card">
+          <span class="panel-kicker">BOARD</span>
+          <div class="control-grid">
+            <button id="new-game" type="button">New game</button>
+            <button id="undo" type="button">Undo</button>
+            <button id="flip" type="button">Flip board</button>
+            <button id="copy-fen" type="button">Copy FEN</button>
+          </div>
+        </div>
+
+        <div class="panel-card telemetry-card">
+          <span class="panel-kicker">ENGINE TELEMETRY</span>
+          <div class="telemetry-grid">
+            <div><span>Depth</span><strong>—</strong></div>
+            <div><span>Eval</span><strong>—</strong></div>
+            <div><span>NPS</span><strong>—</strong></div>
+            <div><span>Hash</span><strong>—</strong></div>
+          </div>
+          <p class="muted tiny">Reserved for the native/WASM Crab core. The UI is designed around real UCI-style telemetry from day one.</p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="promotion-dialog" class="promotion-dialog">
+    <form method="dialog">
+      <p class="panel-kicker">PROMOTE PAWN</p>
+      <div class="promotion-grid">
+        <button value="q" aria-label="Promote to queen">♛</button>
+        <button value="r" aria-label="Promote to rook">♜</button>
+        <button value="b" aria-label="Promote to bishop">♝</button>
+        <button value="n" aria-label="Promote to knight">♞</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

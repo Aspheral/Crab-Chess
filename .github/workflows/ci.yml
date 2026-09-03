@@ -1,0 +1,72 @@
+name: Crab CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native ${{ matrix.compiler }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select GCC
+        if: matrix.compiler == 'gcc'
+        run: |
+          echo "CC=gcc" >> "$GITHUB_ENV"
+          echo "CXX=g++" >> "$GITHUB_ENV"
+
+      - name: Select Clang
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: UCI handshake
+        run: printf 'uci\nisready\nquit\n' | ./build/crab | tee /tmp/crab-uci.txt && grep -q 'uciok' /tmp/crab-uci.txt && grep -q 'readyok' /tmp/crab-uci.txt
+
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DCRAB_ENABLE_SANITIZERS=ON
+      - name: Build
+        run: cmake --build build-sanitize --parallel 2
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-sanitize --output-on-failure
+
+  web:
+    name: Web smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify required web assets
+        run: |
+          test -f web/index.html
+          test -f web/styles.css
+          test -f web/app.js
+          grep -q 'id="board"' web/index.html
+          grep -q 'chess.js@1.4.0' web/app.js
