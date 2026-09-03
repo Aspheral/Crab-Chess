@@ -251,9 +251,15 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
             }
             else
             {
+                const std::int8_t orientation = OrientTBL[ksq] ^ (56 * perspective);
+                const unsigned    attackerOriented = attacker ^ (8 * perspective);
+
                 while (bb)
                 {
                     Square   from    = pop_lsb(bb);
+                    unsigned fromOriented = uint8_t(from) ^ orientation;
+                    prefetch<PrefetchRw::READ, PrefetchLoc::LOW>(
+                      &index_lut2[attackerOriented][fromOriented][0]);
                     Bitboard attacks = (attacks_bb(pt, from, occupied)) & occupied;
 
                     while (attacks)
