@@ -37,12 +37,20 @@ jobs:
           git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
 
       - name: Record host and compiler
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           uname -a | tee /tmp/host.txt
           lscpu | tee -a /tmp/host.txt
           clang++ --version | tee /tmp/compiler.txt
-          git rev-parse HEAD | tee /tmp/candidate-sha.txt
+          git rev-parse HEAD | tee /tmp/workflow-checkout-sha.txt
+          if [ -n "${PR_HEAD_SHA:-}" ]; then
+            printf '%s\n' "$PR_HEAD_SHA" | tee /tmp/candidate-branch-sha.txt
+          else
+            git rev-parse HEAD | tee /tmp/candidate-branch-sha.txt
+          fi
           git rev-parse origin/crab/sf18-derived-base | tee /tmp/crab-baseline-sha.txt
+          sha256sum experiments/EXP-0004-threat-weight-prefetch.patch | tee /tmp/candidate-patch-sha256.txt
 
       - name: Build accepted Crab control
         run: |
@@ -54,9 +62,11 @@ jobs:
         run: |
           git apply --check --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
           git apply --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
+          git diff --binary -- engine | sha256sum | awk '{print $1}' | tee /tmp/candidate-engine-diff-sha256.txt
           make clean
           make -j2 build ARCH=x86-64-avx2 COMP=clang
           cp engine/src/crab /tmp/crab-candidate
+          sha256sum /tmp/crab-candidate | tee /tmp/candidate-binary-sha256.txt
           /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
           grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/candidate-bench.txt
 
@@ -67,6 +77,7 @@ jobs:
           test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
           make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
           cp /tmp/stockfish/src/stockfish /tmp/sf18
+          sha256sum /tmp/sf18 | tee /tmp/sf18-binary-sha256.txt
           /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
           grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
 
@@ -109,9 +120,14 @@ jobs:
               return q.read_text().strip() if q.exists() else None
           manifest={
             'experiment':'EXP-0004',
-            'candidate_sha':read('/tmp/candidate-sha.txt'),
+            'candidate_branch_sha':read('/tmp/candidate-branch-sha.txt'),
+            'workflow_checkout_sha':read('/tmp/workflow-checkout-sha.txt'),
+            'candidate_patch_sha256':read('/tmp/candidate-patch-sha256.txt'),
+            'candidate_engine_diff_sha256':read('/tmp/candidate-engine-diff-sha256.txt'),
+            'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),
             'accepted_crab_baseline_sha':read('/tmp/crab-baseline-sha.txt'),
             'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
+            'sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),
             'official_bench_nodes':2050811,
             'threads':1,'hash_mb':64,'time_control':'3+0.03','concurrency':2,
             'games_per_match_planned':512,
@@ -144,3 +160,7 @@ jobs:
             /tmp/network-sha256.txt
             /tmp/openings-sha256.txt
             /tmp/cutechess-runner-sha.txt
+            /tmp/candidate-patch-sha256.txt
+            /tmp/candidate-engine-diff-sha256.txt
+            /tmp/candidate-binary-sha256.txt
+            /tmp/sf18-binary-sha256.txt
