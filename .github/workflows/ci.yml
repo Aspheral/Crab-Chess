@@ -46,6 +46,105 @@ jobs:
           make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
+  exp0002-candidate:
+    name: EXP-0002 candidate ${{ matrix.compiler }}
+    if: github.event_name == 'pull_request' && github.head_ref == 'exp/0002-branchless-correction-history'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            comp: gcc
+          - compiler: clang
+            comp: clang
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply candidate
+        run: |
+          git apply --check tools/experiments/patches/EXP-0002-branchless-correction-history.patch
+          git apply tools/experiments/patches/EXP-0002-branchless-correction-history.patch
+          git diff --check
+      - name: Build candidate
+        run: make -j2 build ARCH=x86-64 COMP=${{ matrix.comp }}
+      - name: Candidate identity and exact bench
+        run: |
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/crab-exp2-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-exp2-uci.txt
+          grep -q '^uciok$' /tmp/crab-exp2-uci.txt
+          ./engine/src/crab bench 2>&1 | tee /tmp/crab-exp2-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-exp2-bench.txt
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
+  exp0002-nps:
+    name: EXP-0002 paired GCC AVX2 NPS
+    if: github.event_name == 'pull_request' && github.head_ref == 'exp/0002-branchless-correction-history'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record environment
+        run: |
+          g++ --version
+          lscpu
+      - name: Build control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp engine/src/crab /tmp/crab-exp0002-baseline
+      - name: Build candidate
+        run: |
+          make clean
+          git apply --check tools/experiments/patches/EXP-0002-branchless-correction-history.patch
+          git apply tools/experiments/patches/EXP-0002-branchless-correction-history.patch
+          git diff --check
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp engine/src/crab /tmp/crab-exp0002-candidate
+      - name: Run paired throughput benchmark
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0002-baseline \
+            /tmp/crab-exp0002-candidate \
+            --pairs 10 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0002.json
+          cat /tmp/exp0002.json
+      - name: Upload experiment result
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0002-branchless-correction-nps
+          path: /tmp/exp0002.json
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
+  exp0002-sanitizers:
+    name: EXP-0002 candidate sanitizers
+    if: github.event_name == 'pull_request' && github.head_ref == 'exp/0002-branchless-correction-history'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply candidate
+        run: git apply tools/experiments/patches/EXP-0002-branchless-correction-history.patch
+      - name: Build candidate with address + undefined sanitizers
+        run: make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+      - name: Candidate sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
   sanitizers:
     name: Sanitizers
     runs-on: ubuntu-latest
