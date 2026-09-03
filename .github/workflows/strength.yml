@@ -1,0 +1,135 @@
+name: Crab Strength Screen
+
+on:
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'experiments/**'
+      - 'tools/strength/**'
+      - '.github/workflows/strength.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exp0004-strength:
+    name: EXP-0004 matched games
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install match runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cutechess
+          cutechess-cli --version || true
+
+      - name: Record host and compiler
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          clang++ --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/candidate-sha.txt
+          git rev-parse origin/crab/sf18-derived-base | tee /tmp/crab-baseline-sha.txt
+
+      - name: Build accepted Crab control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-baseline
+
+      - name: Build EXP-0004 candidate
+        run: |
+          git apply --check --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
+          git apply --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-candidate
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/candidate-bench.txt
+
+      - name: Build immutable Stockfish 18 control
+        run: |
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
+
+      - name: Record network checksums
+        run: |
+          find engine/src /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/network-sha256.txt
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+
+      - name: Candidate vs accepted Crab baseline
+        run: |
+          cutechess-cli \
+            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
+            -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 128 -repeat -concurrency 2 \
+            -pgnout /tmp/candidate-vs-crab.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn \
+            --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
+
+      - name: Candidate vs immutable SF18
+        run: |
+          cutechess-cli \
+            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
+            -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 128 -repeat -concurrency 2 \
+            -pgnout /tmp/candidate-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn \
+            --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
+
+      - name: Write audit manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          def read(p):
+              q=pathlib.Path(p)
+              return q.read_text().strip() if q.exists() else None
+          manifest={
+            'experiment':'EXP-0004',
+            'candidate_sha':read('/tmp/candidate-sha.txt'),
+            'accepted_crab_baseline_sha':read('/tmp/crab-baseline-sha.txt'),
+            'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
+            'official_bench_nodes':2050811,
+            'threads':1,'hash_mb':64,'time_control':'3+0.03','concurrency':2,
+            'games_per_match_planned':256,
+            'opening_order':'sequential, 8 plies, repeated colors',
+            'adjudication':'none',
+            'compiler':read('/tmp/compiler.txt'),
+            'host':read('/tmp/host.txt'),
+            'network_checksums':read('/tmp/network-sha256.txt'),
+            'opening_checksum':read('/tmp/openings-sha256.txt'),
+          }
+          pathlib.Path('/tmp/audit.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Upload strength evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0004-strength-screen
+          path: |
+            /tmp/audit.json
+            /tmp/candidate-vs-crab.json
+            /tmp/candidate-vs-sf18.json
+            /tmp/candidate-vs-crab.pgn
+            /tmp/candidate-vs-sf18.pgn
+            /tmp/candidate-bench.txt
+            /tmp/sf18-bench.txt
+            /tmp/network-sha256.txt
+            /tmp/openings-sha256.txt
