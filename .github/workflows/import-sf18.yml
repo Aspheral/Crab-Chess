@@ -32,8 +32,9 @@ jobs:
       - name: Replace bootstrap engine with frozen upstream source
         run: |
           rm -rf engine
-          mkdir -p engine/src upstream
+          mkdir -p engine/src engine/scripts upstream
           cp -a /tmp/crab-sf18/src/. engine/src/
+          cp -a /tmp/crab-sf18/scripts/. engine/scripts/
           cp /tmp/crab-sf18/Copying.txt ./Copying.txt
           cp /tmp/crab-sf18/AUTHORS ./AUTHORS
           cat > upstream/stockfish18.json <<'JSON'
@@ -74,10 +75,12 @@ jobs:
           grep -q '2050811' /tmp/crab-bench.txt
 
       - name: Remove generated build/network artifacts
+        if: always()
         run: |
           make -C engine/src clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
-          find engine/src -maxdepth 1 -type f -name 'crab*' -delete
+          find engine/src -maxdepth 1 -type f -name 'crab' -delete
+          find engine/src -maxdepth 1 -type f -name 'crab.exe' -delete
 
       - name: Commit imported Crab baseline
         run: |
