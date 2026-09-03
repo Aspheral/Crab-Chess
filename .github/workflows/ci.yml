@@ -65,7 +65,7 @@ jobs:
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   exp0003:
-    name: EXP-0003 paired Clang AVX2 NPS
+    name: EXP-0003 confirmation Clang AVX2 NPS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,16 +95,16 @@ jobs:
           /tmp/crab-exp0003-candidate bench 2>&1 | tee /tmp/crab-exp0003-bench.txt
           grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-exp0003-bench.txt
 
-      - name: Run paired throughput benchmark
+      - name: Run paired throughput confirmation
         run: |
           python3 tools/bench/paired_nps.py \
             /tmp/crab-exp0003-baseline \
             /tmp/crab-exp0003-candidate \
-            --pairs 10 \
+            --pairs 20 \
             --warmups 2 \
             --expected-nodes 2050811 \
-            --json /tmp/exp0003.json
-          cat /tmp/exp0003.json
+            --json /tmp/exp0003-confirm.json
+          cat /tmp/exp0003-confirm.json
 
       - name: Candidate sanitizer smoke
         env:
@@ -118,8 +118,8 @@ jobs:
       - name: Upload experiment result
         uses: actions/upload-artifact@v4
         with:
-          name: exp0003-nnue-sf-assume-nps
-          path: /tmp/exp0003.json
+          name: exp0003-nnue-sf-assume-confirmation
+          path: /tmp/exp0003-confirm.json
 
       - name: Clean generated artifacts
         if: always()
