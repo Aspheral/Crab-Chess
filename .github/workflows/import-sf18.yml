@@ -1,0 +1,90 @@
+name: Import SF18 as Crab baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - crab/sf18-derived-base
+    paths:
+      - .github/workflows/import-sf18.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Crab branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Fetch exact Stockfish 18 source
+        run: |
+          rm -rf /tmp/crab-sf18
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/crab-sf18
+          git -C /tmp/crab-sf18 checkout cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/crab-sf18 rev-parse HEAD)" = "cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+
+      - name: Replace bootstrap engine with frozen upstream source
+        run: |
+          rm -rf engine
+          mkdir -p engine/src upstream
+          cp -a /tmp/crab-sf18/src/. engine/src/
+          cp /tmp/crab-sf18/Copying.txt ./Copying.txt
+          cp /tmp/crab-sf18/AUTHORS ./AUTHORS
+          cat > upstream/stockfish18.json <<'JSON'
+          {
+            "upstream_repository": "official-stockfish/Stockfish",
+            "release_tag": "sf_18",
+            "commit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+            "tree": "a416dabd4bd16caf1908d520ea45971fb509dc5f",
+            "official_bench": 2050811,
+            "release_date": "2026-01-31",
+            "license": "GPL-3.0"
+          }
+          JSON
+
+      - name: Rebrand project/runtime identity as Crab
+        run: python3 tools/rebrand_sf18.py engine/src
+
+      - name: Verify public engine identity
+        run: |
+          grep -q 'EXE = crab' engine/src/Makefile
+          grep -q 'Crab Chess' engine/src/misc.cpp
+          grep -q 'namespace Crab' engine/src/main.cpp
+
+      - name: Build Crab baseline
+        run: make -C engine/src -j2 build ARCH=x86-64
+
+      - name: Verify UCI identity
+        run: |
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/crab-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/crab-uci.txt
+          grep -q '^uciok$' /tmp/crab-uci.txt
+          grep -q '^readyok$' /tmp/crab-uci.txt
+
+      - name: Verify frozen SF18 search signature
+        run: |
+          ./engine/src/crab bench 2>&1 | tee /tmp/crab-bench.txt
+          grep -q '2050811' /tmp/crab-bench.txt
+
+      - name: Remove generated build/network artifacts
+        run: |
+          make -C engine/src clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+          find engine/src -maxdepth 1 -type f -name 'crab*' -delete
+
+      - name: Commit imported Crab baseline
+        run: |
+          git config user.name "Crab Chess Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git diff --cached --quiet && exit 0
+          git commit -m "engine: import Stockfish 18 as Crab baseline"
+          git push origin HEAD:${{ github.ref_name }}
