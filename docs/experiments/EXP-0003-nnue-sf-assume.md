@@ -2,7 +2,7 @@
 
 ## Status
 
-**Positive first pass; confirmation in progress.** The accepted Crab engine source is still unchanged. CI applies `experiments/EXP-0003-nnue-sf-assume.patch` only to the candidate build until the result is independently confirmed on another hosted runner.
+**REJECTED — first-pass gain did not reproduce.** The accepted Crab engine source remains unchanged. The candidate patch is retained only on the experiment branch as research history.
 
 ## Hypothesis
 
@@ -19,7 +19,7 @@ Based on post-SF18 upstream commit:
 - LLR: `2.93 (-2.94,2.94) <0.00,2.00>`
 - upstream classification: `No functional change`
 
-Crab independently reproduces the change against its frozen SF18-derived baseline rather than assuming the later upstream result transfers to our compiler and hardware.
+Crab independently reproduced the change against its frozen SF18-derived baseline instead of assuming the later upstream result transferred to our compiler and hardware.
 
 ## Crab control
 
@@ -34,8 +34,8 @@ Crab independently reproduces the change against its frozen SF18-derived baselin
 3. Candidate UCI identity remains Crab Chess.
 4. Candidate bench remains exactly `2,050,811` nodes.
 5. Candidate passes ASan/UBSan smoke testing.
-6. Paired same-runner Clang AVX2 throughput testing must show a repeatable positive result before the source change can be promoted.
-7. A positive throughput result is not automatically claimed as Elo. Any strength claim requires separate game testing.
+6. Paired same-runner Clang AVX2 throughput testing must show a repeatable positive result before source promotion.
+7. Throughput alone is not an Elo claim.
 
 ## First Crab reproduction
 
@@ -64,12 +64,37 @@ Throughput:
 - baseline mean/stdev: `982,785.4 / 19,704.38 NPS`
 - candidate mean/stdev: `991,716.3 / 9,128.31 NPS`
 
-This is Crab's first positive local performance result after EXP-0001 and EXP-0002 were rejected. It is promising but modest enough that Crab requires a larger second paired run before promotion.
+The first pass looked promising, so Crab required a larger fresh-runner confirmation before promotion.
 
-## Confirmation plan
+## Confirmation reproduction
 
-Repeat the same control-versus-candidate test on a fresh hosted runner with 20 alternating pairs after 2 warmups. Promotion requires the confirmation run to remain positive while preserving all correctness gates.
+Environment:
+
+- fresh GitHub hosted Ubuntu 24.04 runner
+- Clang 18.1.3
+- AMD EPYC 7763
+- `ARCH=x86-64-avx2`
+- 20 alternating control/candidate pairs after 2 warmups
+
+Correctness and safety again passed:
+
+- patch applied cleanly
+- candidate compiled successfully
+- Crab UCI identity remained intact
+- candidate bench remained exactly `2,050,811` nodes
+- candidate ASan/UBSan smoke passed
+
+Throughput:
+
+- baseline median: `973,339 NPS`
+- candidate median: `974,257 NPS`
+- median speedup: **`+0.0943%`**
+- paired median speedup: **`-0.1437%`**
+- baseline mean/stdev: `971,363.6 / 23,882.86 NPS`
+- candidate mean/stdev: `970,832.25 / 17,106.45 NPS`
+
+The candidate's raw median was effectively flat, while the paired median and mean both favored the control. The larger confirmation therefore failed the repeatability gate.
 
 ## Result
 
-**Provisional positive: +0.92% median NPS / +0.82% paired median. Awaiting confirmation before source promotion.**
+**REJECTED.** EXP-0003 preserves correctness but does not demonstrate a repeatable throughput improvement on Crab's current Clang 18 / EPYC environment. The candidate source change is not promoted.
