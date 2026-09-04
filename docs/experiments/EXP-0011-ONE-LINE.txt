@@ -1,0 +1,1 @@
+EXP-0011 REJECTED: correctness passed, but 512 matched games vs accepted Crab did not demonstrate a strength gain; no engine promotion and no SF18 parity/superiority claim.
