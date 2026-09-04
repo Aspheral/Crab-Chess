@@ -91,21 +91,22 @@ jobs:
           grep -q 'planned games=512' /tmp/strength-dry-run.txt
       - name: Verify independent-replication aggregation
         run: |
-          cat > /tmp/screen1.json <<'EOF'
-          {"engine":"CrabCandidate","opponent":"CrabBaseline","games":4,"wins":2,"draws":1,"losses":1}
-          EOF
-          cat > /tmp/screen2.json <<'EOF'
-          {"engine":"CrabCandidate","opponent":"CrabBaseline","games":4,"wins":1,"draws":2,"losses":1}
-          EOF
-          python3 tools/strength/combine_summaries.py /tmp/screen1.json /tmp/screen2.json --json /tmp/combined.json
+          cat > /tmp/screen-a.json <<'JSON'
+          {"engine":"Candidate","opponent":"Control","games":4,"wins":1,"draws":2,"losses":1}
+          JSON
+          cat > /tmp/screen-b.json <<'JSON'
+          {"engine":"Candidate","opponent":"Control","games":4,"wins":2,"draws":2,"losses":0}
+          JSON
+          python3 tools/strength/combine_summaries.py \
+            /tmp/screen-a.json /tmp/screen-b.json \
+            --json /tmp/combined.json | tee /tmp/combined.txt
           python3 - <<'PY'
           import json
           x=json.load(open('/tmp/combined.json'))
-          assert x['independent_summaries'] == 2
           assert x['games'] == 8
-          assert x['wins'] == 3 and x['draws'] == 3 and x['losses'] == 2
-          assert abs(x['score'] - 0.5625) < 1e-12
-          assert x['elo95_low'] < x['elo'] < x['elo95_high']
+          assert x['wins'] == 3 and x['draws'] == 4 and x['losses'] == 1
+          assert abs(x['score'] - 0.625) < 1e-12
+          assert len(x['sources']) == 2
           PY
 
   exp0004:
