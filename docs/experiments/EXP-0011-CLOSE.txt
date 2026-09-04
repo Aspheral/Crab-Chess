@@ -1,0 +1,8 @@
+EXP-0011 PR closure
+
+PR: #31
+State: closed
+Merged: false
+Search candidate promoted: false
+
+The experiment branch remains evidence only. The accepted branch is unchanged pending merge of this separate docs-only audit record.
