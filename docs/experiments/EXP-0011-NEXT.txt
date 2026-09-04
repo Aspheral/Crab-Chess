@@ -1,0 +1,3 @@
+next_experiment=EXP-0012
+constraint=one_focused_hypothesis
+baseline=e8cefaae1523776b4e783e2cb04cfa7389a08433
