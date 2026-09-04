@@ -1,0 +1,1 @@
+Proceed with a fresh EXP-0012 hypothesis after this docs-only rejection record is merged.
