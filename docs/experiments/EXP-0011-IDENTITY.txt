@@ -1,0 +1,21 @@
+EXP-0011 tested candidate identity
+
+Experiment wrapper SHA:
+a3434c26745a54b2f4540f882ed68cb651a037c0
+
+Accepted source to which the candidate patch was applied:
+e8cefaae1523776b4e783e2cb04cfa7389a08433
+
+Exact patch SHA-256:
+1d8afa8b3e8af624d879ff0c49e71e0625cfdacce544c06a9c9e0e32b5612c3e
+
+Applied engine diff SHA-256:
+b446be6c1757cb33a57dbc6c6ac0a6eb7feb48a1476b1fbfd9ffed4d75ccf053
+
+Tested candidate binary SHA-256:
+546db943b54b57fe2c0338a93202cb338874b1d8ac2f6f4888c20633c58d022f
+
+Deterministic candidate bench:
+2347163 nodes
+
+This tuple is the canonical audit identity for the tested engine candidate. The wrapper SHA alone is not.
