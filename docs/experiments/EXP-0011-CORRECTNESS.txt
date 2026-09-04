@@ -1,0 +1,17 @@
+EXP-0011 correctness result
+
+PASS
+
+- Exact candidate patch applied cleanly to accepted Crab.
+- Applied patch changed only engine/src/search.cpp.
+- Native GCC candidate build passed.
+- Native Clang x86-64-avx2 candidate build passed.
+- UCI engine identity remained Crab Chess.
+- ASan/UBSan smoke passed.
+- Accepted Crab bench remained exactly 2050811 nodes.
+- Untouched Stockfish 18 bench remained exactly 2050811 nodes.
+- Candidate bench was deterministic at exactly 2347163 nodes on two identical runs.
+- NNUE files matched by SHA-256 across candidate, accepted Crab, and untouched SF18.
+- Normal Crab CI including website smoke passed for the tested experiment head.
+
+Correctness passing did not authorize promotion without strength evidence.
