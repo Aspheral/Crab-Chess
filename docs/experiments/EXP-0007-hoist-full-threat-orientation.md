@@ -63,6 +63,10 @@ Strength testing is **not started** until the performance hypothesis reproduces.
 
 The final record must include W/D/L, Elo estimate and confidence interval or SPRT result, CPU/compiler, Threads/Hash, time control, opening checksum, NNUE checksums, and candidate/control binary hashes.
 
+## Workflow audit note
+
+Unlike EXP-0006, both EXP-0007 throughput workflows use a full-history candidate checkout and `set -euo pipefail` for source-diff verification. This prevents the shallow-checkout/empty-diff hash failure mode observed in EXP-0006.
+
 ## Current decision
 
 Pending correctness and throughput evidence. No Elo gain, SF18 parity, or SF18 superiority claim exists for EXP-0007.
