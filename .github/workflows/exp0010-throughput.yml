@@ -1,0 +1,148 @@
+name: EXP-0010 Continuation-Correction Prefetch
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-throughput:
+    if: ${{ github.head_ref == 'exp/0010-prefetch-continuation-correction-history' }}
+    name: Correctness + Paired Clang AVX2 NPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout accepted Crab baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 7b35f4213f2e03edb73cad541ecfa4a380391427
+          path: accepted
+
+      - name: Checkout EXP-0010 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+
+      - name: Record provenance and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "candidate_branch_sha=${{ github.event.pull_request.head.sha }}"
+            echo "workflow_checkout_sha=${{ github.sha }}"
+            echo "accepted_crab_baseline=7b35f4213f2e03edb73cad541ecfa4a380391427"
+            echo "accepted_engine_semantics=EXP-0004"
+            echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+            echo "sf18_official_bench=2050811"
+            echo "upstream_hypothesis_commit=4150d22b86d1cc83b3a3b1111a63a3935590bcb3"
+            echo "threads=1"
+            echo "hash_mib=16"
+            echo "arch=x86-64-avx2"
+            echo "pairs=20"
+            echo "warmups=2"
+            clang++ --version
+            g++ --version
+            lscpu
+            sha256sum candidate/experiments/EXP-0010-prefetch-continuation-correction-history.patch
+          } | tee /tmp/exp0010-provenance.txt
+          test "$(sha256sum candidate/experiments/EXP-0010-prefetch-continuation-correction-history.patch | cut -d' ' -f1)" = "69ba4c297d3cb72322831adcc404a1324e3bf75d4a42820f9d65023f92b406bc"
+          git -C candidate apply --check --directory=engine experiments/EXP-0010-prefetch-continuation-correction-history.patch
+          git -C candidate apply --directory=engine experiments/EXP-0010-prefetch-continuation-correction-history.patch
+          test "$(git -C candidate diff --name-only)" = "engine/src/search.cpp"
+          git -C candidate diff -- engine/src/search.cpp | sha256sum | tee -a /tmp/exp0010-provenance.txt
+
+      - name: Native GCC candidate correctness
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/exp0010-gcc-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/exp0010-gcc-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/exp0010-gcc-uci.txt
+          ./engine/src/crab bench 2>&1 | tee /tmp/exp0010-gcc-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/exp0010-gcc-bench.txt
+
+      - name: Build accepted Crab Clang AVX2 control
+        working-directory: accepted
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0010-baseline
+          sha256sum /tmp/crab-exp0010-baseline | tee -a /tmp/exp0010-provenance.txt
+          sha256sum engine/src/nn-c288c895ea92.nnue engine/src/nn-37f18f62d772.nnue | tee -a /tmp/exp0010-provenance.txt
+          /tmp/crab-exp0010-baseline bench 2>&1 | tee /tmp/exp0010-baseline-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/exp0010-baseline-bench.txt
+
+      - name: Build EXP-0010 Clang AVX2 candidate
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0010-candidate
+          sha256sum /tmp/crab-exp0010-candidate | tee -a /tmp/exp0010-provenance.txt
+          sha256sum engine/src/nn-c288c895ea92.nnue engine/src/nn-37f18f62d772.nnue | tee -a /tmp/exp0010-provenance.txt
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0010-candidate | tee /tmp/exp0010-clang-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/exp0010-clang-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/exp0010-clang-uci.txt
+          /tmp/crab-exp0010-candidate bench 2>&1 | tee /tmp/exp0010-candidate-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/exp0010-candidate-bench.txt
+
+      - name: Verify network checksums match
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum accepted/engine/src/nn-c288c895ea92.nnue | cut -d' ' -f1)" = "$(sha256sum candidate/engine/src/nn-c288c895ea92.nnue | cut -d' ' -f1)"
+          test "$(sha256sum accepted/engine/src/nn-37f18f62d772.nnue | cut -d' ' -f1)" = "$(sha256sum candidate/engine/src/nn-37f18f62d772.nnue | cut -d' ' -f1)"
+
+      - name: Run paired throughput screen
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 candidate/tools/bench/paired_nps.py \
+            /tmp/crab-exp0010-baseline \
+            /tmp/crab-exp0010-candidate \
+            --pairs 20 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0010-throughput.json
+          cat /tmp/exp0010-throughput.json
+
+      - name: Candidate sanitizer smoke
+        working-directory: candidate
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+
+      - name: Upload EXP-0010 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0010-throughput-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/exp0010-throughput.json
+            /tmp/exp0010-provenance.txt
+            /tmp/exp0010-gcc-uci.txt
+            /tmp/exp0010-gcc-bench.txt
+            /tmp/exp0010-clang-uci.txt
+            /tmp/exp0010-baseline-bench.txt
+            /tmp/exp0010-candidate-bench.txt
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make -C accepted clean || true
+          make -C candidate clean || true
+          find accepted/engine/src candidate/engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
