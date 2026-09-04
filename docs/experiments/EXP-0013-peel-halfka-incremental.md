@@ -2,7 +2,7 @@
 
 ## Status
 
-**PLANNED / ACTIVE.** No strength or performance claim is made yet.
+**REJECTED BEFORE IMPLEMENTATION (NOT APPLICABLE).** No engine candidate was generated, no strength or performance claim is made, and accepted Crab engine semantics remain unchanged.
 
 ## Immutable references
 
@@ -10,14 +10,12 @@
 - Official SF18 deterministic bench: `2050811` nodes
 - Accepted Crab lineage at experiment start: `5c460c30922ed634e5259e0d3a7c242b8f834427`
 - Accepted Crab engine semantics: EXP-0004
-- Candidate branch: `exp/0013-peel-halfka-incremental`
+- Experiment branch: `exp/0013-peel-halfka-incremental`
 - Upstream motivation: Stockfish commit `8bc5caa2e4b1d4c189b1428e93158b10d3edb0b6`, authored by Timothy Herchen and merged 2026-08-29
 
 ## Focused hypothesis
 
-On AVX2 builds, the incremental HalfKAv2 PSQ feature-update lists are normally only one or two entries long. Replacing the generic indexed loop in that incremental path with one unconditional first update plus one conditional second update may reduce loop/control overhead in a hot NNUE accumulator path without changing engine semantics.
-
-The candidate must be gated to AVX2-compatible builds. It must not be generalized to AVX512 or other architectures without independent evidence.
+On AVX2 builds, the incremental HalfKAv2 PSQ feature-update lists are normally only one or two entries long. The proposed experiment was to replace a generic indexed loop in that incremental path with one unconditional first update plus one conditional second update, reducing loop/control overhead without changing engine semantics.
 
 ## Upstream motivation only
 
@@ -25,54 +23,44 @@ The post-SF18 Stockfish change reported:
 
 - general STC: 96,192 games, 24,637 / 47,291 / 24,264, LLR 2.96 for `<0.00,2.00>`;
 - AVX2 STC: 61,024 games, 15,789 / 29,778 / 15,457, LLR 2.94 for `<0.00,2.00>`;
-- AVX512ICL STC: **failed**, 90,368 games, 22,968 / 44,312 / 23,088, LLR -2.96;
+- AVX512ICL STC: failed, 90,368 games, 22,968 / 44,312 / 23,088, LLR -2.96;
 - upstream therefore gated the change to AVX2;
 - local upstream timing over 500 runs reported base 1,907,788 +/- 1,384 vs test 1,930,017 +/- 1,426, approximately +1.17%.
 
-These results motivate EXP-0013 but are **not Crab evidence**.
+These results motivated EXP-0013 but are **not Crab evidence**.
 
-## Intended candidate scope
+## Applicability audit
 
-Engine source scope should be limited to `engine/src/nnue/nnue_accumulator.cpp` plus experiment/harness documentation.
+The experiment was stopped at the source-applicability gate before creating an engine candidate.
 
-The intended adaptation is the smallest SF18-compatible form of the upstream optimization:
+Crab's SF18-derived `engine/src/nnue/nnue_accumulator.cpp` does **not** contain the generic PSQ incremental loop targeted by upstream commit `8bc5caa2...`. Its PSQ one-move incremental path already:
 
-1. specialize the PSQ incremental feature application path for the known-small update list;
-2. assert the incremental-list cardinality expected by the existing update logic;
-3. apply element 0 directly and element 1 only when present;
-4. retain the generic loop for non-incremental/full-refresh paths;
-5. gate the specialization to AVX2 so architectures for which upstream evidence was neutral/negative retain existing code.
+1. asserts `added` and `removed` list cardinalities of one or two;
+2. uses fixed-arity `AccumulatorUpdateContext::apply<...>()` instantiations for the 1/1, 1/2, 2/1 and 2/2 cases;
+3. feeds those indices into compile-time `fused_row_reduce` operations rather than iterating a runtime PSQ feature list.
 
-Crab naming, UCI identity, executable naming, GPLv3 notices, Stockfish copyright, modification notices, and upstream attribution must remain intact.
+The generic list-based `updateContext.apply(added, removed)` path in this Crab tree is used for `ThreatFeatureSet`, not the PSQ incremental path targeted by the upstream HalfKA optimization.
 
-## Required correctness gates
+Therefore the stated optimization has already been structurally superseded in this SF18-derived tree. Importing the later Stockfish patch literally is impossible without first replacing Crab's existing fixed-arity implementation with a less specialized abstraction; attempting an approximate rewrite would no longer test the focused EXP-0013 hypothesis.
 
-Before performance or strength conclusions:
+## Evidence record
 
-- exact source-scope audit;
-- GCC correctness build;
-- Clang `x86-64-avx2` build;
-- Crab Chess UCI identity check;
-- ASan/UBSan smoke;
-- candidate deterministic bench twice;
-- accepted Crab deterministic bench control;
-- immutable SF18 checkout at the exact SHA and official `2050811` bench;
-- unchanged large/small NNUE checksums;
-- no website regression.
+- Candidate engine SHA: **none generated**
+- Accepted Crab baseline SHA: `5c460c30922ed634e5259e0d3a7c242b8f834427`
+- Immutable SF18 baseline SHA: `cb3d4ee9b47d0c5aae855b12379378ea1439675c`
+- Engine source changes: **none**
+- Compiler / CPU: **N/A; stopped before build gate**
+- Threads / Hash: **N/A; stopped before match gate**
+- NNUE checksums: **not re-measured; no engine or network change was made**
+- Candidate bench: **N/A; no candidate binary exists**
+- Accepted baseline bench: `2050811` (existing accepted control)
+- SF18 official bench: `2050811`
+- W/D/L: **N/A; strength testing not authorized**
+- Elo / confidence / SPRT: **N/A**
+- Website / WASM impact: **none; documentation-only experiment record**
 
-Because the upstream patch is classified as no functional change, the candidate is expected to retain the accepted deterministic bench signature. Any bench divergence blocks performance testing until explained.
+## Decision
 
-## Evidence plan
+**REJECT / NO-OP.** EXP-0013 is closed as not applicable to the current Crab architecture. No engine code is promoted or reverted because no candidate engine code was committed.
 
-This is primarily a throughput hypothesis. First run a paired fresh-process AVX2 throughput screen against accepted Crab with alternating order and fixed nodes. Only if the speed result is clearly positive and reproducible on an independent fresh runner should matched-resource games be authorized.
-
-If strength testing is reached, use the existing Crab matched protocol against both:
-
-1. latest accepted Crab baseline;
-2. untouched SF18 at `cb3d4ee9b47d0c5aae855b12379378ea1439675c`.
-
-Record candidate SHA, baseline SHA, compiler/CPU, architecture, Threads/Hash, network checksums, test settings, deterministic bench, W/D/L, Elo confidence interval or SPRT result, and evidence artifact digest.
-
-## Decision rule
-
-Reject/revert on correctness failure, deterministic-bench mismatch without a justified functional change, non-positive or noisy throughput evidence, or strength evidence that does not justify promotion. Never infer Stockfish 18 parity or superiority from upstream tests or from a small Crab screen.
+This is an evidence-preserving rejection, not a negative strength result. It says only that the proposed optimization does not correspond to the current Crab PSQ incremental implementation. It provides no evidence for or against Stockfish 18 parity or superiority.
