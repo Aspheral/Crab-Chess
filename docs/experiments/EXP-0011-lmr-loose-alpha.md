@@ -8,8 +8,8 @@
 
 - Official Stockfish 18 baseline: `cb3d4ee9b47d0c5aae855b12379378ea1439675c` (`sf_18`)
 - Official SF18 deterministic bench: `2050811` nodes
-- Accepted Crab baseline: `7b35f4213f2e03edb73cad541ecfa4a380391427`
-- Accepted engine semantics currently include EXP-0004 only
+- Accepted Crab baseline: `e8cefaae1523776b4e783e2cb04cfa7389a08433`
+- Accepted engine semantics currently include EXP-0004 only; `e8cefaae...` advances lineage only by preserved EXP-0010 documentation
 - Candidate branch: `exp/0011-lmr-loose-alpha`
 
 ## Focused hypothesis
@@ -43,7 +43,7 @@ Patch artifact: `experiments/EXP-0011-lmr-loose-alpha.patch`.
 
 This patch intentionally changes search behavior, so the candidate is **not** required to retain the SF18 `2050811` node signature. Instead:
 
-1. accepted Crab must still bench exactly `2050811` nodes;
+1. accepted Crab at `e8cefaae1523776b4e783e2cb04cfa7389a08433` must still bench exactly `2050811` nodes;
 2. immutable SF18 must still bench exactly `2050811` nodes;
 3. the patched candidate must build under Clang AVX2 and retain Crab Chess UCI identity;
 4. the candidate bench is run twice and must produce the same node count both times;
