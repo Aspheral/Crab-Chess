@@ -1,0 +1,17 @@
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@
+         // Decrease reduction for moves that escape a capture. Filter out castling moves, because
+         // they are coded as 'king captures rook' and hence break make_move().
+         else if (type_of(move) == NORMAL && !pos.see_ge(reverse_move(move)))
+             r -= 2 * reductionScale;
+ 
+         // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
+         r -= ss->statScore * 850 / 8192;
++
++        if (!capture && !is_decisive(alpha))
++            r += 3 * std::clamp(alpha - eval, -64, 96);
+ 
+         // In general we want to cap the LMR depth search at newDepth. But if
+         // reductions are really negative and movecount is low, we allow this move
