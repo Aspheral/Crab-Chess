@@ -1,0 +1,16 @@
+EXP-0011 reproduction identity
+
+Start from accepted Crab commit:
+e8cefaae1523776b4e783e2cb04cfa7389a08433
+
+Apply the archived EXP-0011 candidate patch to engine/src/search.cpp.
+Verify patch SHA-256:
+1d8afa8b3e8af624d879ff0c49e71e0625cfdacce544c06a9c9e0e32b5612c3e
+
+Verify the resulting binary for the recorded Clang x86-64-avx2 environment:
+546db943b54b57fe2c0338a93202cb338874b1d8ac2f6f4888c20633c58d022f
+
+Verify deterministic bench:
+2347163 nodes
+
+This reproduction information is archival. The candidate is rejected and should not be promoted into accepted Crab.
