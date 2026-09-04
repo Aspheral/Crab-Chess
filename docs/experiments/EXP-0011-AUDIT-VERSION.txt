@@ -1,0 +1,4 @@
+audit_version=1
+experiment=EXP-0011
+record_type=final_rejection
+engine_change_in_archive=false
