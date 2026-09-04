@@ -1,0 +1,13 @@
+{
+  "engine": "CrabCandidate",
+  "opponent": "CrabBaseline",
+  "games": 512,
+  "wins": 48,
+  "draws": 412,
+  "losses": 52,
+  "score": 0.49609375,
+  "elo": -2.714395737316835,
+  "elo95_low": -16.03691574731397,
+  "elo95_high": 10.600143021958111,
+  "method": "draw-aware normal 95% CI; screening estimate, not SPRT"
+}
