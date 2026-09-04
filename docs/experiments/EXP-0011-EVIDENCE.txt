@@ -1,0 +1,13 @@
+EXP-0011 evidence index
+
+Primary narrative: docs/experiments/EXP-0011-loose-alpha-lmr.md
+Audit manifest: docs/experiments/EXP-0011-audit.json
+Accepted-Crab summary: docs/experiments/EXP-0011-vs-crab.json
+SF18 summary: docs/experiments/EXP-0011-vs-sf18.json
+Exact patch: docs/experiments/EXP-0011-candidate.patch
+Identity note: docs/experiments/EXP-0011-NOTE.md
+Provenance: docs/experiments/EXP-0011-provenance.txt
+Bench/checksums: docs/experiments/EXP-0011-bench-and-checksums.txt
+Artifact identity: docs/experiments/EXP-0011-ARTIFACT.txt
+
+Final decision: REJECTED, NOT PROMOTED.
