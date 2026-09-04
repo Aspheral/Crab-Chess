@@ -1,0 +1,13 @@
+{
+  "engine": "CrabCandidate",
+  "opponent": "Stockfish18",
+  "games": 512,
+  "wins": 49,
+  "draws": 426,
+  "losses": 37,
+  "score": 0.51171875,
+  "elo": 8.144513059083152,
+  "elo95_low": -4.183200187428273,
+  "elo95_high": 20.492772803753496,
+  "method": "draw-aware normal 95% CI; screening estimate, not SPRT"
+}
