@@ -1,0 +1,5 @@
+EXP-0011 licensing/branding scope
+
+The rejected experiment changed only Stockfish-derived search implementation for testing. It did not alter GPLv3 licensing, Stockfish copyright/attribution notices, NNUE data, UCI Crab Chess identity, executable/build branding, or website branding.
+
+This audit branch contains Crab-owned experiment documentation only and makes no engine promotion.
