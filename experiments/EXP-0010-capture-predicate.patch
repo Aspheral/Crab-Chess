@@ -1,0 +1,14 @@
+diff --git a/engine/src/position.h b/engine/src/position.h
+index 1086468e554..b710d067c99 100644
+--- a/engine/src/position.h
++++ b/engine/src/position.h
+@@ -333,7 +333,8 @@ inline bool Position::is_chess960() const { return chess960; }
+ 
+ inline bool Position::capture(Move m) const {
+     assert(m.is_ok());
+-    return (!empty(m.to_sq()) && m.type_of() != CASTLING) || m.type_of() == EN_PASSANT;
++    const MoveType mt = m.type_of();
++    return mt == EN_PASSANT || (mt != CASTLING && board[m.to_sq()] != NO_PIECE);
+ }
+ 
+ // Returns true if a move is generated from the capture stage, having also
