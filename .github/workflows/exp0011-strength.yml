@@ -49,7 +49,7 @@ jobs:
             lscpu
             sha256sum candidate/experiments/EXP-0011-loose-alpha-lmr.patch
           } | tee /tmp/exp0011-provenance.txt
-          test "$(sha256sum candidate/experiments/EXP-0011-loose-alpha-lmr.patch | cut -d' ' -f1)" = "4e01df054eefba1d862c66190f06f291fa6d6f11690f74c373ebe9e96ccd9a8a"
+          test "$(sha256sum candidate/experiments/EXP-0011-loose-alpha-lmr.patch | cut -d' ' -f1)" = "1d8afa8b3e8af624d879ff0c49e71e0625cfdacce544c06a9c9e0e32b5612c3e"
           git -C candidate apply --check --directory=engine experiments/EXP-0011-loose-alpha-lmr.patch
           git -C candidate apply --directory=engine experiments/EXP-0011-loose-alpha-lmr.patch
           test "$(git -C candidate diff --name-only)" = "engine/src/search.cpp"
@@ -200,7 +200,7 @@ jobs:
             'accepted_engine_semantics':'EXP-0004',
             'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
             'official_sf18_bench_nodes':2050811,
-            'candidate_patch_sha256':'4e01df054eefba1d862c66190f06f291fa6d6f11690f74c373ebe9e96ccd9a8a',
+            'candidate_patch_sha256':'1d8afa8b3e8af624d879ff0c49e71e0625cfdacce544c06a9c9e0e32b5612c3e',
             'candidate_engine_diff_sha256':read('/tmp/exp0011-engine-diff-sha256.txt'),
             'candidate_bench':read('/tmp/exp0011-candidate-bench-nodes.txt'),
             'accepted_binary_sha256':read('/tmp/exp0011-baseline-binary-sha256.txt'),
