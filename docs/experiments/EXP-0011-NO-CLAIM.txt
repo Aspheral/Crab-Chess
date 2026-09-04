@@ -1,0 +1,5 @@
+EXP-0011 claim boundary
+
+The 512-game SF18 screen is not statistically meaningful evidence of Stockfish 18 parity or superiority. Its +8.1445 Elo point estimate has a 95% confidence interval spanning -4.1832 to +20.4928 Elo.
+
+The project therefore makes no parity claim, no superiority claim, and no accepted strength increase from EXP-0011.
