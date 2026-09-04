@@ -1,0 +1,9 @@
+EXP-0011 FINAL
+
+Correctness passed.
+1024 matched-resource strength games completed.
+Candidate did not demonstrate improvement versus accepted Crab.
+Candidate rejected.
+PR #31 closed without merge.
+Accepted Crab engine unchanged.
+Audit identity strengthened and evidence preserved in durable docs.
