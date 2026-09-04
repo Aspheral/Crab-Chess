@@ -1,0 +1,29 @@
+diff --git a/engine/src/tt.cpp b/engine/src/tt.cpp
+--- a/engine/src/tt.cpp
++++ b/engine/src/tt.cpp
+@@ -225,11 +225,22 @@ std::tuple<bool, TTData, TTWriter> TranspositionTable::probe(const Key key) const
+             // After `read()` completes that copy is final, but may be self-inconsistent.
+             return {tte[i].is_occupied(), tte[i].read(), TTWriter(&tte[i])};
+ 
+-    // Find an entry to be replaced according to the replacement strategy
+-    TTEntry* replace = tte;
++    // Find an entry to be replaced according to the replacement strategy.
++    // Cache the current replacement score so it is not recomputed when the same
++    // entry remains the least valuable across successive cluster comparisons.
++    TTEntry* replace      = tte;
++    int      replaceValue = replace->depth8 - replace->relative_age(generation8);
++
+     for (int i = 1; i < ClusterSize; ++i)
+-        if (replace->depth8 - replace->relative_age(generation8)
+-            > tte[i].depth8 - tte[i].relative_age(generation8))
++    {
++        const int candidateValue = tte[i].depth8 - tte[i].relative_age(generation8);
++        if (replaceValue > candidateValue)
++        {
+             replace = &tte[i];
++            replaceValue = candidateValue;
++        }
++    }
+ 
+     return {false,
+             TTData{Move::none(), VALUE_NONE, VALUE_NONE, DEPTH_ENTRY_OFFSET, BOUND_NONE, false},
