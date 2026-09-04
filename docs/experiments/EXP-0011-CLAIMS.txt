@@ -1,0 +1,13 @@
+EXP-0011 allowed claims
+
+Allowed:
+- correctness passed
+- candidate bench was deterministic at 2347163
+- candidate scored 48/412/52 vs accepted Crab in the 512-game screen
+- candidate scored 49/426/37 vs untouched SF18 in the separate 512-game screen
+- experiment was rejected and not promoted
+
+Not allowed:
+- Crab gained Elo from EXP-0011
+- Crab is equal to SF18 because of EXP-0011
+- Crab is stronger than SF18 because of EXP-0011
