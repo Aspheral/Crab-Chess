@@ -1,0 +1,9 @@
+Canonical EXP-0011 records:
+- EXP-0011-loose-alpha-lmr.md
+- EXP-0011-audit.json
+- EXP-0011-vs-crab.json
+- EXP-0011-vs-sf18.json
+- EXP-0011-candidate.patch
+- EXP-0011-NOTE.md
+
+Other EXP-0011 text files are supporting audit breadcrumbs.
