@@ -1,0 +1,11 @@
+EXP-0011: Reduce LMR less aggressively in loose alpha windows
+
+Status: REJECTED
+Correctness: PASS
+Strength evidence: INCONCLUSIVE/NOT POSITIVE VS ACCEPTED CRAB
+Promotion: NO
+
+vs accepted Crab: 48 W / 412 D / 52 L, -2.7144 Elo, 95% CI [-16.0369,+10.6001]
+vs SF18: 49 W / 426 D / 37 L, +8.1445 Elo, 95% CI [-4.1832,+20.4928]
+
+Accepted Crab remains e8cefaae1523776b4e783e2cb04cfa7389a08433 (EXP-0004 semantics).
