@@ -188,20 +188,29 @@ constexpr auto index_lut1 = init_index_luts();
 // [attacker][from][to]
 constexpr auto index_lut2 = index_lut2_array();
 
-// Index of a feature for a given king position and another piece on some square
-inline sf_always_inline IndexType FullThreats::make_index(
-  Color perspective, Piece attacker, Square from, Square to, Piece attacked, Square ksq) {
-    const std::int8_t orientation   = OrientTBL[ksq] ^ (56 * perspective);
-    unsigned          from_oriented = uint8_t(from) ^ orientation;
-    unsigned          to_oriented   = uint8_t(to) ^ orientation;
-
-    std::int8_t swap              = 8 * perspective;
-    unsigned    attacker_oriented = attacker ^ swap;
-    unsigned    attacked_oriented = attacked ^ swap;
+inline sf_always_inline IndexType make_index_oriented(std::int8_t orientation,
+                                                       unsigned    swap,
+                                                       unsigned    attacker_oriented,
+                                                       Square      from,
+                                                       Square      to,
+                                                       Piece       attacked) {
+    const unsigned from_oriented     = uint8_t(from) ^ orientation;
+    const unsigned to_oriented       = uint8_t(to) ^ orientation;
+    const unsigned attacked_oriented = attacked ^ swap;
 
     return index_lut1[attacker_oriented][attacked_oriented][from_oriented < to_oriented]
          + offsets[attacker_oriented][from_oriented]
          + index_lut2[attacker_oriented][from_oriented][to_oriented];
+}
+
+// Index of a feature for a given king position and another piece on some square
+inline sf_always_inline IndexType FullThreats::make_index(
+  Color perspective, Piece attacker, Square from, Square to, Piece attacked, Square ksq) {
+    const std::int8_t orientation      = OrientTBL[ksq] ^ (56 * perspective);
+    const unsigned    swap             = 8 * perspective;
+    const unsigned    attacker_oriented = attacker ^ swap;
+
+    return make_index_oriented(orientation, swap, attacker_oriented, from, to, attacked);
 }
 
 // Get a list of indices for active features in ascending order
@@ -210,13 +219,17 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
     Square   ksq      = pos.square<KING>(perspective);
     Bitboard occupied = pos.pieces();
 
+    const std::int8_t orientation = OrientTBL[ksq] ^ (56 * perspective);
+    const unsigned    swap        = 8 * perspective;
+
     for (Color color : {WHITE, BLACK})
     {
         for (PieceType pt = PAWN; pt <= KING; ++pt)
         {
-            Color    c        = Color(perspective ^ color);
-            Piece    attacker = make_piece(c, pt);
-            Bitboard bb       = pos.pieces(c, pt);
+            Color    c                 = Color(perspective ^ color);
+            Piece    attacker          = make_piece(c, pt);
+            unsigned attacker_oriented = attacker ^ swap;
+            Bitboard bb                = pos.pieces(c, pt);
 
             if (pt == PAWN)
             {
@@ -232,7 +245,8 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
                     Square    to       = pop_lsb(attacks_left);
                     Square    from     = to - right;
                     Piece     attacked = pos.piece_on(to);
-                    IndexType index    = make_index(perspective, attacker, from, to, attacked, ksq);
+                    IndexType index = make_index_oriented(
+                      orientation, swap, attacker_oriented, from, to, attacked);
 
                     if (index < Dimensions)
                         active.push_back(index);
@@ -243,7 +257,8 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
                     Square    to       = pop_lsb(attacks_right);
                     Square    from     = to - left;
                     Piece     attacked = pos.piece_on(to);
-                    IndexType index    = make_index(perspective, attacker, from, to, attacked, ksq);
+                    IndexType index = make_index_oriented(
+                      orientation, swap, attacker_oriented, from, to, attacked);
 
                     if (index < Dimensions)
                         active.push_back(index);
@@ -260,8 +275,8 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
                     {
                         Square    to       = pop_lsb(attacks);
                         Piece     attacked = pos.piece_on(to);
-                        IndexType index =
-                          make_index(perspective, attacker, from, to, attacked, ksq);
+                        IndexType index = make_index_oriented(
+                          orientation, swap, attacker_oriented, from, to, attacked);
 
                         if (index < Dimensions)
                             active.push_back(index);
