@@ -1,0 +1,5 @@
+status=REJECTED
+correctness=PASS
+promotion=NO
+accepted_engine_changed=NO
+accepted_semantics=EXP-0004
