@@ -12,7 +12,7 @@
 - Accepted Crab engine semantics: EXP-0004 threat-weight L2 prefetch
 - Candidate branch: `exp/0010-prefetch-continuation-correction-history`
 - Candidate patch: `experiments/EXP-0010-prefetch-continuation-correction-history.patch`
-- Candidate patch SHA-256: `69ba4c297d3cb72322831adcc404a1324e3bf75d4a42820f9d65023f92b406bc`
+- Candidate patch SHA-256: `9f2c69860840833b62fb93dfbbaab38a661258cb35ea2290b4dc05c2e0e30489`
 
 ## Focused hypothesis
 
