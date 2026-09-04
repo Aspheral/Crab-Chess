@@ -1,0 +1,1 @@
+EXP-0011 is complete and rejected. Select a fresh, isolated EXP-0012 hypothesis from the unchanged accepted Crab baseline. Do not combine the rejected loose-alpha LMR adjustment with the next candidate.
