@@ -1,0 +1,9 @@
+GitHub Actions run: 33835572850
+Artifact ID: 9924767582
+Artifact name: exp0011-strength-a3434c26745a54b2f4540f882ed68cb651a037c0
+Artifact size: 1132762 bytes
+Artifact SHA-256 digest: 6f7086912ce10fdd16352c16d9f9396109b40ad65bcd57be63a226cb33a60ee0
+Created: 2026-09-04T05:28:07Z
+Original expiration: 2026-12-03T04:06:20Z
+
+The durable repository audit files in this directory preserve the decision-critical manifest, provenance, exact candidate patch, and both match summaries so the rejection record does not depend on Actions artifact retention.
