@@ -1,0 +1,5 @@
+END EXP-0011
+
+Outcome: REJECTED
+Engine promotion: NONE
+Next engine experiment: EXP-0012 or later, one isolated hypothesis at a time.
