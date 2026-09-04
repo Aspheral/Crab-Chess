@@ -1,0 +1,1 @@
+EXP-0011 is a rejected experiment. Do not apply or promote its candidate patch without starting a new experiment and fresh evidence.
