@@ -1,0 +1,1 @@
+See EXP-0011-loose-alpha-lmr.md and EXP-0011-audit.json for the canonical rejection record.
