@@ -1,0 +1,5 @@
+EXP-0011 audit_complete=true
+
+The rejection record includes the exact source identity tuple, candidate bench, binaries, networks, opening suite, test environment, W/D/L, Elo confidence intervals, Actions artifact identity, upstream provenance, and final promotion decision.
+
+No accepted engine source is modified by this archival branch.
