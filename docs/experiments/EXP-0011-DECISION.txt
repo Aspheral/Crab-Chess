@@ -1,0 +1,10 @@
+decision=REJECTED_NOT_PROMOTED
+accepted_crab_unchanged=true
+accepted_crab_sha=e8cefaae1523776b4e783e2cb04cfa7389a08433
+accepted_engine_semantics=EXP-0004
+original_pr=31
+original_pr_merged=false
+sf18_parity_claim=false
+sf18_superiority_claim=false
+larger_confirmation_authorized=false
+next_action=new_isolated_hypothesis
