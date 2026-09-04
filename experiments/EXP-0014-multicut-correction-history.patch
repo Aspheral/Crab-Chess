@@ -1,0 +1,18 @@
+diff --git a/engine/src/search.cpp b/engine/src/search.cpp
+--- a/engine/src/search.cpp
++++ b/engine/src/search.cpp
+@@ -1152,5 +1152,14 @@ Value Search::Worker::search(
+             else if (value >= beta && !is_decisive(value))
+             {
+                 ttMoveHistory << std::max(-400 - 100 * depth, -4000);
++
++                if (!ss->inCheck && value > ss->staticEval)
++                {
++                    const int bonus =
++                      std::clamp(int(value - ss->staticEval) * singularDepth * 177 / 1024,
++                                 -CORRECTION_HISTORY_LIMIT / 4, CORRECTION_HISTORY_LIMIT / 4);
++                    update_correction_history(pos, ss, *this, bonus);
++                }
++
+                 return value;
+             }

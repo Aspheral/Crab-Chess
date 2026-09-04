@@ -1,0 +1,289 @@
+name: EXP-0014 Strength
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/EXP-0014-multicut-correction-history.patch'
+      - 'docs/experiments/EXP-0014-multicut-correction-history.md'
+      - '.github/workflows/exp0014-strength.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  matched-strength:
+    if: ${{ github.head_ref == 'exp/0014-multicut-correction-history' }}
+    name: Multi-cut correction-history matched games
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout EXP-0014 harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: harness
+          fetch-depth: 0
+
+      - name: Checkout accepted Crab control
+        uses: actions/checkout@v4
+        with:
+          ref: 5c460c30922ed634e5259e0d3a7c242b8f834427
+          path: accepted
+          fetch-depth: 0
+
+      - name: Checkout candidate base
+        uses: actions/checkout@v4
+        with:
+          ref: 5c460c30922ed634e5259e0d3a7c242b8f834427
+          path: candidate
+          fetch-depth: 0
+
+      - name: Apply and verify EXP-0014 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C candidate apply --check ../harness/experiments/EXP-0014-multicut-correction-history.patch
+          git -C candidate apply ../harness/experiments/EXP-0014-multicut-correction-history.patch
+          changed="$(git -C candidate diff --name-only | sort)"
+          test "$changed" = "engine/src/search.cpp"
+          sha256sum harness/experiments/EXP-0014-multicut-correction-history.patch | tee /tmp/candidate-patch-sha256.txt
+          git -C candidate diff --binary -- engine/src/search.cpp | sha256sum | awk '{print $1}' | tee /tmp/candidate-source-diff-sha256.txt
+
+      - name: Build pinned match runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          test -x /tmp/cutechess-build/cutechess-cli
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
+
+      - name: Record provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "experiment=EXP-0014"
+            echo "candidate_branch_sha=${{ github.event.pull_request.head.sha }}"
+            echo "workflow_checkout_sha=${{ github.sha }}"
+            echo "accepted_crab_baseline=5c460c30922ed634e5259e0d3a7c242b8f834427"
+            echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+            echo "upstream_source_patch=218c74ec4d97807afaab3a4dbda94f43e6e02647"
+            echo "sf18_official_bench=2050811"
+            echo "threads=1"
+            echo "hash_mib=64"
+            echo "time_control=3+0.03"
+            echo "games_per_match=512"
+            echo "concurrency=2"
+            echo "opening_plies=8"
+            echo '--- clang ---'
+            clang++ --version
+            echo '--- gcc ---'
+            g++ --version
+            echo '--- cpu ---'
+            lscpu
+          } | tee /tmp/provenance.txt
+
+      - name: Build accepted Crab control
+        working-directory: accepted
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0014-baseline
+          sha256sum /tmp/crab-exp0014-baseline | tee /tmp/accepted-binary-sha256.txt
+          /tmp/crab-exp0014-baseline bench 2>&1 | tee /tmp/accepted-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/accepted-bench.txt
+
+      - name: Candidate GCC correctness build
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/candidate-gcc-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/candidate-gcc-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/candidate-gcc-uci.txt
+          ./engine/src/crab bench 2>&1 | tee /tmp/candidate-gcc-bench.txt
+          gcc_nodes="$(grep -E 'Nodes searched' /tmp/candidate-gcc-bench.txt | tail -1 | awk -F: '{gsub(/[[:space:]]/,"",$2); print $2}')"
+          test -n "$gcc_nodes"
+          printf '%s\n' "$gcc_nodes" | tee /tmp/candidate-gcc-bench-nodes.txt
+
+      - name: Candidate Clang AVX2 build and deterministic bench
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0014-candidate
+          sha256sum /tmp/crab-exp0014-candidate | tee /tmp/candidate-binary-sha256.txt
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0014-candidate | tee /tmp/candidate-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/candidate-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/candidate-uci.txt
+          /tmp/crab-exp0014-candidate bench 2>&1 | tee /tmp/candidate-bench-1.txt
+          /tmp/crab-exp0014-candidate bench 2>&1 | tee /tmp/candidate-bench-2.txt
+          n1="$(grep -E 'Nodes searched' /tmp/candidate-bench-1.txt | tail -1 | awk -F: '{gsub(/[[:space:]]/,"",$2); print $2}')"
+          n2="$(grep -E 'Nodes searched' /tmp/candidate-bench-2.txt | tail -1 | awk -F: '{gsub(/[[:space:]]/,"",$2); print $2}')"
+          gcc_nodes="$(cat /tmp/candidate-gcc-bench-nodes.txt)"
+          test -n "$n1"
+          test "$n1" = "$n2"
+          test "$n1" = "$gcc_nodes"
+          printf '%s\n' "$n1" | tee /tmp/candidate-bench-nodes.txt
+
+      - name: Candidate sanitizer smoke
+        working-directory: candidate
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -euo pipefail
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab | tee /tmp/candidate-sanitizer.txt
+          grep -q '^id name Crab Chess ' /tmp/candidate-sanitizer.txt
+
+      - name: Verify Crab network checksums match
+        shell: bash
+        run: |
+          set -euo pipefail
+          large_a="$(sha256sum accepted/engine/src/nn-c288c895ea92.nnue | cut -d' ' -f1)"
+          large_c="$(sha256sum candidate/engine/src/nn-c288c895ea92.nnue | cut -d' ' -f1)"
+          small_a="$(sha256sum accepted/engine/src/nn-37f18f62d772.nnue | cut -d' ' -f1)"
+          small_c="$(sha256sum candidate/engine/src/nn-37f18f62d772.nnue | cut -d' ' -f1)"
+          test "$large_a" = "$large_c"
+          test "$small_a" = "$small_c"
+          sha256sum accepted/engine/src/nn-c288c895ea92.nnue accepted/engine/src/nn-37f18f62d772.nnue \
+                    candidate/engine/src/nn-c288c895ea92.nnue candidate/engine/src/nn-37f18f62d772.nnue \
+            | tee /tmp/crab-network-sha256.txt
+
+      - name: Build immutable Stockfish 18 control
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          sha256sum /tmp/sf18 | tee /tmp/sf18-binary-sha256.txt
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
+          find /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/sf18-network-sha256.txt
+
+      - name: Record opening checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum harness/tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+
+      - name: Candidate vs accepted cumulative Crab
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/cutechess-cli \
+            -engine name=CrabCandidate cmd=/tmp/crab-exp0014-candidate proto=uci \
+            -engine name=CrabBaseline cmd=/tmp/crab-exp0014-baseline proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=harness/tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
+            -pgnout /tmp/candidate-vs-crab.pgn
+          python3 harness/tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn \
+            --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
+          cat /tmp/candidate-vs-crab.json
+
+      - name: Candidate vs immutable SF18
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/cutechess-cli \
+            -engine name=CrabCandidate cmd=/tmp/crab-exp0014-candidate proto=uci \
+            -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=harness/tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
+            -pgnout /tmp/candidate-vs-sf18.pgn
+          python3 harness/tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn \
+            --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
+          cat /tmp/candidate-vs-sf18.json
+
+      - name: Write audit manifest
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          def read(p):
+              q=pathlib.Path(p)
+              return q.read_text().strip() if q.exists() else None
+          manifest={
+            'experiment':'EXP-0014',
+            'candidate_branch_sha':'${{ github.event.pull_request.head.sha }}',
+            'workflow_checkout_sha':'${{ github.sha }}',
+            'accepted_crab_baseline_sha':'5c460c30922ed634e5259e0d3a7c242b8f834427',
+            'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
+            'upstream_patch_sha':'218c74ec4d97807afaab3a4dbda94f43e6e02647',
+            'candidate_patch_sha256':read('/tmp/candidate-patch-sha256.txt'),
+            'candidate_source_diff_sha256':read('/tmp/candidate-source-diff-sha256.txt'),
+            'accepted_binary_sha256':read('/tmp/accepted-binary-sha256.txt'),
+            'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),
+            'sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),
+            'candidate_bench_nodes':read('/tmp/candidate-bench-nodes.txt'),
+            'candidate_gcc_bench_nodes':read('/tmp/candidate-gcc-bench-nodes.txt'),
+            'sf18_official_bench_nodes':2050811,
+            'threads':1,
+            'hash_mb':64,
+            'time_control':'3+0.03',
+            'concurrency':2,
+            'games_per_match_planned':512,
+            'opening_order':'sequential, 8 plies, repeated colors',
+            'adjudication':'none',
+            'match_runner':'Cute Chess v1.3.1',
+            'match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),
+            'openings_sha256':read('/tmp/openings-sha256.txt'),
+            'crab_network_checksums':read('/tmp/crab-network-sha256.txt'),
+            'sf18_network_checksums':read('/tmp/sf18-network-sha256.txt'),
+            'provenance':read('/tmp/provenance.txt'),
+          }
+          pathlib.Path('/tmp/audit.json').write_text(json.dumps(manifest, indent=2)+'\n')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload EXP-0014 strength evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0014-strength-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/audit.json
+            /tmp/provenance.txt
+            /tmp/candidate-patch-sha256.txt
+            /tmp/candidate-source-diff-sha256.txt
+            /tmp/accepted-binary-sha256.txt
+            /tmp/candidate-binary-sha256.txt
+            /tmp/sf18-binary-sha256.txt
+            /tmp/candidate-bench-nodes.txt
+            /tmp/candidate-gcc-bench-nodes.txt
+            /tmp/accepted-bench.txt
+            /tmp/candidate-gcc-bench.txt
+            /tmp/candidate-bench-1.txt
+            /tmp/candidate-bench-2.txt
+            /tmp/sf18-bench.txt
+            /tmp/candidate-uci.txt
+            /tmp/candidate-gcc-uci.txt
+            /tmp/candidate-sanitizer.txt
+            /tmp/crab-network-sha256.txt
+            /tmp/sf18-network-sha256.txt
+            /tmp/openings-sha256.txt
+            /tmp/cutechess-runner-sha.txt
+            /tmp/candidate-vs-crab.json
+            /tmp/candidate-vs-sf18.json
+            /tmp/candidate-vs-crab.pgn
+            /tmp/candidate-vs-sf18.pgn
