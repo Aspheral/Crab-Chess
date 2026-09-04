@@ -1,0 +1,3 @@
+EXP-0011 archive sealed.
+
+The engine candidate is rejected. This branch contains documentation/evidence only and intentionally carries no accepted engine modification.
