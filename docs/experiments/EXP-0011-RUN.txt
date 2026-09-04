@@ -1,0 +1,11 @@
+EXP-0011 valid run metadata
+
+run_id=33835572850
+job_id=100907274599
+workflow=EXP-0011 Loose-Alpha LMR Strength
+candidate_vs_accepted_games=512
+candidate_vs_sf18_games=512
+total_strength_games=1024
+artifact_id=9924767582
+artifact_size_bytes=1132762
+artifact_digest_sha256=6f7086912ce10fdd16352c16d9f9396109b40ad65bcd57be63a226cb33a60ee0
