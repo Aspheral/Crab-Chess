@@ -7,14 +7,20 @@ on:
         description: Candidate branch SHA to reproduce
         required: true
         type: string
+  pull_request:
+    branches:
+      - crab/sf18-derived-base
 
 permissions:
   contents: read
 
 jobs:
   reproduce:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'exp/0007-hoist-full-threat-orientation' }}
     name: Fresh-runner paired Clang AVX2 NPS
     runs-on: ubuntu-latest
+    env:
+      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || '6d8f2c768347990ec9f56f9d7f276c65e3ec0280' }}
     steps:
       - name: Checkout accepted Crab baseline
         uses: actions/checkout@v4
@@ -25,14 +31,14 @@ jobs:
       - name: Checkout EXP-0007 candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.candidate_sha }}
+          ref: ${{ env.CANDIDATE_SHA }}
           path: candidate
           fetch-depth: 0
 
       - name: Record provenance
         run: |
           {
-            echo "candidate_branch_sha=${{ inputs.candidate_sha }}"
+            echo "candidate_branch_sha=${CANDIDATE_SHA}"
             echo "workflow_checkout_sha=${{ github.sha }}"
             echo "accepted_crab_baseline=0fb724d48004b8e405700c83d09c2e54f7655575"
             echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c"
@@ -99,7 +105,7 @@ jobs:
       - name: Upload EXP-0007 reproduction evidence
         uses: actions/upload-artifact@v4
         with:
-          name: exp0007-reproduction-${{ inputs.candidate_sha }}
+          name: exp0007-reproduction-${{ env.CANDIDATE_SHA }}
           path: |
             /tmp/exp0007-reproduction.json
             /tmp/exp0007-reproduction-provenance.txt
