@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compile strength helpers
-        run: python3 -m py_compile tools/strength/summarize_match.py tools/strength/run_match.py
+        run: python3 -m py_compile tools/strength/summarize_match.py tools/strength/run_match.py tools/strength/combine_summaries.py
       - name: Verify canonical matched-game command
         run: |
           python3 tools/strength/run_match.py \
@@ -89,6 +89,24 @@ jobs:
           grep -q 'order=sequential' /tmp/strength-dry-run.txt
           grep -q 'plies=8' /tmp/strength-dry-run.txt
           grep -q 'planned games=512' /tmp/strength-dry-run.txt
+      - name: Verify independent-replication aggregation
+        run: |
+          cat > /tmp/screen1.json <<'EOF'
+          {"engine":"CrabCandidate","opponent":"CrabBaseline","games":4,"wins":2,"draws":1,"losses":1}
+          EOF
+          cat > /tmp/screen2.json <<'EOF'
+          {"engine":"CrabCandidate","opponent":"CrabBaseline","games":4,"wins":1,"draws":2,"losses":1}
+          EOF
+          python3 tools/strength/combine_summaries.py /tmp/screen1.json /tmp/screen2.json --json /tmp/combined.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/combined.json'))
+          assert x['independent_summaries'] == 2
+          assert x['games'] == 8
+          assert x['wins'] == 3 and x['draws'] == 3 and x['losses'] == 2
+          assert abs(x['score'] - 0.5625) < 1e-12
+          assert x['elo95_low'] < x['elo'] < x['elo95_high']
+          PY
 
   exp0004:
     if: ${{ github.head_ref == 'exp/0004-threat-weight-prefetch' }}
