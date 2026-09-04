@@ -225,18 +225,21 @@ std::tuple<bool, TTData, TTWriter> TranspositionTable::probe(const Key key) cons
     TTEntry* const tte   = first_entry(key);
     const uint16_t key16 = uint16_t(key);  // Use the low 16 bits as key inside the cluster
 
-    for (int i = 0; i < ClusterSize; ++i)
-        if (tte[i].key16 == key16)
-            // This gap is the main place for read races.
-            // After `read()` completes that copy is final, but may be self-inconsistent.
-            return {tte[i].is_occupied(), tte[i].read(), TTWriter(&tte[i])};
+    if (tte[0].key16 == key16)
+        return {tte[0].is_occupied(), tte[0].read(), TTWriter(&tte[0])};
+    if (tte[1].key16 == key16)
+        return {tte[1].is_occupied(), tte[1].read(), TTWriter(&tte[1])};
+    if (tte[2].key16 == key16)
+        return {tte[2].is_occupied(), tte[2].read(), TTWriter(&tte[2])};
 
-    // Find an entry to be replaced according to the replacement strategy
+    // Find an entry to be replaced according to the existing replacement strategy.
     TTEntry* replace = tte;
-    for (int i = 1; i < ClusterSize; ++i)
-        if (replace->depth8 - replace->relative_age(generation8)
-            > tte[i].depth8 - tte[i].relative_age(generation8))
-            replace = &tte[i];
+    if (replace->depth8 - replace->relative_age(generation8)
+        > tte[1].depth8 - tte[1].relative_age(generation8))
+        replace = &tte[1];
+    if (replace->depth8 - replace->relative_age(generation8)
+        > tte[2].depth8 - tte[2].relative_age(generation8))
+        replace = &tte[2];
 
     return {false,
             TTData{Move::none(), VALUE_NONE, VALUE_NONE, DEPTH_ENTRY_OFFSET, BOUND_NONE, false},
