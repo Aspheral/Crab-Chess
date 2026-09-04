@@ -1,0 +1,3 @@
+EXP-0011 durable record
+
+Actions artifacts expire. Decision-critical evidence has therefore been copied into repository history on this docs-only branch. The original artifact digest remains recorded so the archived summaries can be traced back to the exact successful run.
