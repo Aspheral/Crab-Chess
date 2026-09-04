@@ -1,126 +1,138 @@
 # Crab Chess
 
-Crab Chess is an engine-first chess project with one deliberately extreme target:
+Crab Chess is a high-performance GPLv3 UCI chess engine and research project with one deliberately extreme target:
 
-> **Match or exceed Stockfish 18 under reproducible, controlled head-to-head testing.**
+> **Match or exceed the official Stockfish 18 release under reproducible, controlled head-to-head testing.**
 
-The project is not allowed to claim parity from a guessed Elo number, a handful of wins, analysis screenshots, or mismatched hardware. Strength claims must come from statistically meaningful tests with controlled time controls, openings, hardware, thread/hash settings, colors, adjudication, and engine builds.
+Crab does not start from a toy engine. The native engine is being rebased onto the official Stockfish 18 release (`sf_18`, commit `cb3d4ee9b47d0c5aae855b12379378ea1439675c`, official bench `2050811`) and then developed as a measured optimization fork.
 
-## Project pillars
+## Identity
 
-1. **Correctness before speed** — legal move generation, make/unmake, repetition, castling, en-passant, promotion, draw rules, and UCI behavior must be exact.
-2. **Measurement before intuition** — every search/evaluation change should be benchmarked and, once the testing harness is mature, strength-tested.
-3. **Engine-first architecture** — the native engine is the source of truth. The website is a client, eventually consuming the same engine through WebAssembly.
-4. **Regression gates** — perft, tactical suites, deterministic bench, sanitizer builds, UCI protocol tests, and head-to-head results are permanent infrastructure.
-5. **No fake parity** — Stockfish-18 parity means a statistically credible result under a published protocol.
+The product identity is **Crab Chess**.
 
-## Planned architecture
+User-facing and project-owned surfaces use Crab branding:
+
+- executable: `crab`
+- UCI engine name: `Crab Chess`
+- build targets and packages: Crab
+- website and WASM client: Crab Chess
+- benchmark/experiment names: Crab
+- new namespaces, tools, documentation, telemetry, and release artifacts: Crab
+
+The upstream GPLv3 license and copyright/provenance notices are preserved where legally required. See `UPSTREAM.md` and `Copying.txt` once the Stockfish-18 source import is complete.
+
+## Development model
+
+Crab uses two baselines.
+
+1. **Immutable upstream baseline** — official Stockfish 18, commit `cb3d4ee9b47d0c5aae855b12379378ea1439675c`.
+2. **Accepted Crab baseline** — the strongest Crab commit that has passed the project’s correctness, benchmark, and strength gates.
+
+Every engine experiment is small enough to measure independently. A candidate must answer:
+
+- Is it correct?
+- Does deterministic bench remain valid?
+- Did speed improve without changing intended behavior?
+- Did playing strength improve against the accepted Crab baseline?
+- Does it also hold up against the untouched SF18 reference where the experiment warrants direct comparison?
+
+Changes without evidence are rejected or reverted.
+
+## Strength claims
+
+Crab may not claim parity from a guessed Elo, analysis depth, NPS alone, a tactical suite, or a small handful of wins.
+
+The eventual challenge protocol freezes:
+
+- exact Crab and SF18 commit/binary checksums
+- NNUE network checksums
+- CPU and operating system
+- compiler and architecture target
+- thread count and affinity
+- hash size
+- NUMA policy
+- tablebase access
+- opening suite and seed
+- paired colors
+- time control
+- adjudication rules
+- number of games or sequential stopping rule
+- confidence interval and/or SPRT bounds
+
+A claim that Crab is **better** must be reproduced across more than one hardware class and more than one materially different time control.
+
+## Engine research priorities
+
+Because the starting point is already SF18-strength code, Crab development focuses on improvements rather than reimplementing solved foundations:
+
+### Search
+- correction-history experiments
+- continuation/capture/pawn-history refinements
+- LMR/LMP/futility formula research
+- pruning interaction studies
+- singular-extension and ProbCut refinements
+- root search stability
+- time-allocation modeling
+- thread interaction and search-diversity experiments
+
+### Evaluation / NNUE
+- SFNNv10-compatible baseline validation
+- alternative threat representations
+- feature-transformer experiments
+- accumulator/update-path optimization
+- quantization and SIMD research
+- network architecture experiments backed by reproducible training recipes
+
+### Performance
+- hot-path profiling
+- cache layout and false-sharing work
+- modern CPU instruction dispatch
+- AVX2/AVX-512/VNNI experiments
+- NUMA behavior
+- transposition-table layout/replacement research
+- PGO/LTO and compiler-specific tuning
+
+### Testing infrastructure
+- deterministic bench tracking
+- paired game runner
+- SPRT automation
+- experiment manifests
+- PGN archive
+- performance telemetry
+- regression position suites
+- reproducible build metadata
+
+## Website
+
+The website is the public Crab Chess cockpit. It will provide:
+
+- playable local chess
+- Human vs Crab through WebAssembly
+- engine analysis with PV, depth, seldepth, nodes, NPS, hashfull, WDL, and evaluation
+- FEN/PGN import/export
+- clocks and common time controls
+- premoves, drag/tap interaction, arrows, annotations, and mobile support
+- engine version/build selection
+- benchmark and strength-history dashboards
+
+The board may inherit the strongest interaction ideas from Vanta Chess, but Crab’s version should be cleaner, more accessible, and more useful as an engine-development interface.
+
+## Repository shape
 
 ```text
 Crab-Chess/
-├─ engine/                 # Native C++ engine core + UCI executable
-│  ├─ include/crab/
-│  ├─ src/
-│  └─ tests/
-├─ web/                    # Playable browser client; native rules now, WASM engine later
-├─ tools/                  # Match runner, SPRT, benchmark, PGN/EPD utilities
-├─ tests/                  # Cross-component regression positions and protocols
-├─ benchmarks/             # Versioned performance/strength reference data
-├─ docs/                   # Architecture, roadmap, testing protocol, research notes
-└─ .github/workflows/      # CI, sanitizers, perft, web checks, benchmark smoke tests
+├─ engine/                 # Crab native C++ engine derived from the SF18 baseline
+├─ upstream/               # immutable provenance/reference metadata where useful
+├─ experiments/            # optimization manifests and accepted/rejected results
+├─ tools/                  # match runner, SPRT, benchmark, PGN/EPD utilities
+├─ benchmarks/             # deterministic performance and strength records
+├─ web/                    # Crab Chess browser client + future WASM engine
+├─ docs/                   # architecture, roadmap, testing and research notes
+└─ .github/workflows/      # CI, sanitizers, benchmarks, web and match smoke tests
 ```
 
-## Strength roadmap
+## License and provenance
 
-### Phase 0 — Laboratory
-- Reproducible CMake builds.
-- UCI shell.
-- Board representation and Zobrist hashing.
-- Legal move generator.
-- Make/unmake correctness.
-- Perft suite through known deep reference positions.
-- Deterministic benchmark format.
+Crab Chess is distributed under the GNU General Public License v3 because its engine is derived from GPLv3-licensed upstream code. Required upstream copyright and license notices are retained. Crab-specific modifications are clearly marked and tracked in Git history and experiment records.
 
-### Phase 1 — Complete classical engine
-- Iterative deepening alpha-beta/PVS.
-- Quiescence search.
-- Transposition table.
-- Aspiration windows.
-- Killer/history/countermove ordering.
-- Null-move pruning.
-- Futility/razoring/LMP/LMR.
-- Extensions and mate-distance pruning.
-- Time management.
-- Classical tapered evaluation sufficient for independent testing.
-
-### Phase 2 — High-performance core
-- Bitboards and tuned attack generation.
-- Cache-aware position/search structures.
-- SIMD-aware hot paths.
-- Multi-threaded search.
-- NUMA-aware scaling where useful.
-- Huge-page/hash experiments.
-- Syzygy tablebase integration.
-- Hardware feature dispatch.
-
-### Phase 3 — NNUE
-- Incrementally updateable accumulator.
-- Quantized inference.
-- SIMD kernels.
-- Reproducible trainer pipeline.
-- Feature-set experiments, including explicit threat-aware inputs.
-- Self-play / external-eval dataset tooling.
-- Network versioning and checksum pinning.
-
-### Phase 4 — Search research loop
-- Correction histories.
-- Rich continuation histories.
-- Data-driven LMR/LMP/futility tuning.
-- Singular-extension research.
-- ProbCut / multi-cut experiments.
-- Search instability and time-allocation modeling.
-- Automated parameter tuning.
-- SPRT-gated experimental branches.
-
-### Phase 5 — Stockfish-18 challenge protocol
-Crab is only considered "on par" when it passes a published match protocol, initially:
-- Same physical machine and OS image.
-- Same logical thread count.
-- Same hash allocation.
-- Same tablebase access.
-- Same opening suite and paired colors.
-- Fixed engine binaries/checksums.
-- Thousands of paired games as required by confidence bounds.
-- Draw adjudication rules fixed before the run.
-- Confidence interval and/or SPRT result reported with raw PGNs.
-
-A stretch gate for "better" is a positive result reproduced on more than one hardware class and at more than one time control.
-
-## Website goals
-
-The website is not a toy demo. It should become the public cockpit for Crab:
-- Play local chess immediately.
-- Human vs Crab when WASM engine support lands.
-- Engine analysis with PV, depth, nodes, NPS, hashfull, WDL, and evaluation graph.
-- FEN/PGN import/export.
-- Board flip, premoves, drag/tap movement, keyboard accessibility.
-- Clocks and common time controls.
-- Analysis arrows and square annotations.
-- Engine build/version selector.
-- Benchmark/strength dashboard sourced from checked-in results.
-- Mobile-first responsive board inspired by the strongest parts of Vanta Chess, but with clearer information hierarchy, better accessibility, and tighter engine telemetry.
-
-## Development rule
-
-Every meaningful engine commit should answer at least one of these:
-
-- Did correctness improve?
-- Did speed improve at equal behavior?
-- Did playing strength improve under a controlled test?
-- Did observability/testing improve enough to make the next strength gain safer?
-
-If the answer is none of the above, the change needs a very good reason.
-
-## Current status
-
-Bootstrap stage. See `docs/ROADMAP.md` once the initial project scaffold lands.
+See `UPSTREAM.md` for the frozen source anchor and derivation policy.

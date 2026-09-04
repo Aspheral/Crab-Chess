@@ -15,48 +15,118 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            comp: gcc
+          - compiler: clang
+            comp: clang
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select GCC
-        if: matrix.compiler == 'gcc'
+      - name: Build Crab
+        run: make -j2 build ARCH=x86-64 COMP=${{ matrix.comp }}
+
+      - name: UCI identity and handshake
         run: |
-          echo "CC=gcc" >> "$GITHUB_ENV"
-          echo "CXX=g++" >> "$GITHUB_ENV"
+          printf 'uci\nisready\nquit\n' | ./engine/src/crab | tee /tmp/crab-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/crab-uci.txt
+          grep -q '^uciok$' /tmp/crab-uci.txt
+          grep -q '^readyok$' /tmp/crab-uci.txt
 
-      - name: Select Clang
-        if: matrix.compiler == 'clang'
+      - name: Deterministic bench gate
         run: |
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXX=clang++" >> "$GITHUB_ENV"
+          ./engine/src/crab bench 2>&1 | tee /tmp/crab-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-bench.txt
+          grep -q 'Nodes/second' /tmp/crab-bench.txt
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --parallel 2
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
-      - name: UCI handshake
-        run: printf 'uci\nisready\nquit\n' | ./build/crab | tee /tmp/crab-uci.txt && grep -q 'uciok' /tmp/crab-uci.txt && grep -q 'readyok' /tmp/crab-uci.txt
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   sanitizers:
-    name: ASan + UBSan
+    name: Sanitizers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DCRAB_ENABLE_SANITIZERS=ON
-      - name: Build
-        run: cmake --build build-sanitize --parallel 2
-      - name: Test
+      - name: Build with address + undefined sanitizers
+        run: make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+      - name: UCI sanitizer smoke
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-sanitize --output-on-failure
+        run: printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
+
+  exp0004:
+    if: ${{ github.head_ref == 'exp/0004-threat-weight-prefetch' }}
+    name: EXP-0004 paired Clang AVX2 NPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record benchmark environment
+        run: |
+          clang++ --version
+          lscpu
+
+      - name: Verify upstream candidate patch
+        run: git apply --check --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
+
+      - name: Build control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0004-baseline
+
+      - name: Apply candidate and build
+        run: |
+          git apply --directory=engine experiments/EXP-0004-threat-weight-prefetch.patch
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-exp0004-candidate
+          printf 'uci\nisready\nquit\n' | /tmp/crab-exp0004-candidate | tee /tmp/crab-exp0004-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/crab-exp0004-uci.txt
+          /tmp/crab-exp0004-candidate bench 2>&1 | tee /tmp/crab-exp0004-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-exp0004-bench.txt
+
+      - name: Run paired throughput benchmark
+        run: |
+          python3 tools/bench/paired_nps.py \
+            /tmp/crab-exp0004-baseline \
+            /tmp/crab-exp0004-candidate \
+            --pairs 20 \
+            --warmups 2 \
+            --expected-nodes 2050811 \
+            --json /tmp/exp0004.json
+          cat /tmp/exp0004.json
+
+      - name: Candidate sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab
+
+      - name: Upload experiment result
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0004-threat-weight-prefetch-nps
+          path: /tmp/exp0004.json
+
+      - name: Clean generated artifacts
+        if: always()
+        run: |
+          make clean || true
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
   web:
     name: Web smoke

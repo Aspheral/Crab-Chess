@@ -1,0 +1,79 @@
+[Event "Crab strength suite 01"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *
+
+[Event "Crab strength suite 02"]
+[Result "*"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 *
+
+[Event "Crab strength suite 03"]
+[Result "*"]
+
+1. e4 e6 2. d4 d5 3. Nc3 Nf6 4. e5 Nfd7 *
+
+[Event "Crab strength suite 04"]
+[Result "*"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Bf5 *
+
+[Event "Crab strength suite 05"]
+[Result "*"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 4. e3 O-O *
+
+[Event "Crab strength suite 06"]
+[Result "*"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 *
+
+[Event "Crab strength suite 07"]
+[Result "*"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 *
+
+[Event "Crab strength suite 08"]
+[Result "*"]
+
+1. d4 d5 2. c4 c6 3. Nf3 Nf6 4. Nc3 dxc4 *
+
+[Event "Crab strength suite 09"]
+[Result "*"]
+
+1. c4 e5 2. Nc3 Nf6 3. Nf3 Nc6 4. g3 d5 *
+
+[Event "Crab strength suite 10"]
+[Result "*"]
+
+1. Nf3 d5 2. g3 c5 3. Bg2 Nc6 4. O-O e5 *
+
+[Event "Crab strength suite 11"]
+[Result "*"]
+
+1. e4 d5 2. exd5 Qxd5 3. Nc3 Qd8 4. d4 Nf6 *
+
+[Event "Crab strength suite 12"]
+[Result "*"]
+
+1. e4 Nf6 2. e5 Nd5 3. d4 d6 4. Nf3 dxe5 *
+
+[Event "Crab strength suite 13"]
+[Result "*"]
+
+1. d4 f5 2. g3 Nf6 3. Bg2 g6 4. Nf3 Bg7 *
+
+[Event "Crab strength suite 14"]
+[Result "*"]
+
+1. c4 c5 2. Nc3 Nc6 3. Nf3 Nf6 4. g3 g6 *
+
+[Event "Crab strength suite 15"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nf6 3. Nxe5 d6 4. Nf3 Nxe4 *
+
+[Event "Crab strength suite 16"]
+[Result "*"]
+
+1. e4 c5 2. Nc3 Nc6 3. f4 g6 4. Nf3 Bg7 *

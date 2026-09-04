@@ -1,0 +1,230 @@
+diff --git a/src/misc.cpp b/src/misc.cpp
+--- a/src/misc.cpp
++++ b/src/misc.cpp
+@@ -471,23 +471,6 @@ uint64_t hash_bytes(const char* data, size_t size) {
+ void start_logger(const std::string& fname) { Logger::start(fname); }
+ 
+ 
+-#ifdef NO_PREFETCH
+-
+-void prefetch(const void*) {}
+-
+-#else
+-
+-void prefetch(const void* addr) {
+-
+-    #if defined(_MSC_VER)
+-    _mm_prefetch((char const*) addr, _MM_HINT_T0);
+-    #else
+-    __builtin_prefetch(addr);
+-    #endif
+-}
+-
+-#endif
+-
+ #ifdef _WIN32
+     #include <direct.h>
+     #define GETCWD _getcwd
+diff --git a/src/misc.h b/src/misc.h
+--- a/src/misc.h
++++ b/src/misc.h
+@@ -37,6 +37,10 @@
+ #include <type_traits>
+ #include <vector>
+ 
++#if !defined(NO_PREFETCH) && (defined(_MSC_VER) || defined(__INTEL_COMPILER))
++    #include <immintrin.h>
++#endif
++
+ #define stringify2(x) #x
+ #define stringify(x) stringify2(x)
+ 
+@@ -46,10 +50,67 @@ std::string engine_version_info();
+ std::string engine_info(bool to_uci = false);
+ std::string compiler_info();
+ 
+-// Preloads the given address in L1/L2 cache. This is a non-blocking
++// Prefetch hint enums for explicit call-site control.
++enum class PrefetchRw {
++    READ,
++    WRITE
++};
++
++// NOTE: PrefetchLoc controls locality / cache level, not whether a prefetch
++//       is issued. In particular, PrefetchLoc::NONE maps to a non-temporal /
++//       lowest-locality prefetch (Intel: _MM_HINT_NTA, GCC/Clang: locality = 0)
++//       and therefore still performs a prefetch. To completely disable
++//       prefetching, define NO_PREFETCH so that prefetch() becomes a no-op.
++enum class PrefetchLoc {
++    NONE,      // Non-temporal / no cache locality (still issues a prefetch)
++    LOW,       // Low locality (e.g. T2 / L2)
++    MODERATE,  // Moderate locality (e.g. T1 / L1)
++    HIGH       // High locality (e.g. T0 / closest cache)
++};
++
++// Preloads the given address into cache. This is a non-blocking
+ // function that doesn't stall the CPU waiting for data to be loaded from memory,
+ // which can be quite slow.
+-void prefetch(const void* addr);
++#ifdef NO_PREFETCH
++template<PrefetchRw RW = PrefetchRw::READ, PrefetchLoc LOC = PrefetchLoc::HIGH>
++void prefetch(const void*) {}
++#elif defined(_MSC_VER) || defined(__INTEL_COMPILER)
++
++constexpr int get_intel_hint(PrefetchRw rw, PrefetchLoc loc) {
++    if (rw == PrefetchRw::WRITE)
++    {
++    #ifdef _MM_HINT_ET0
++        return _MM_HINT_ET0;
++    #else
++        // Fallback when write-prefetch hint is not available: use T0
++        return _MM_HINT_T0;
++    #endif
++    }
++    switch (loc)
++    {
++    case PrefetchLoc::NONE :
++        return _MM_HINT_NTA;
++    case PrefetchLoc::LOW :
++        return _MM_HINT_T2;
++    case PrefetchLoc::MODERATE :
++        return _MM_HINT_T1;
++    case PrefetchLoc::HIGH :
++        return _MM_HINT_T0;
++    default :
++        return _MM_HINT_T0;
++    }
++}
++
++template<PrefetchRw RW = PrefetchRw::READ, PrefetchLoc LOC = PrefetchLoc::HIGH>
++void prefetch(const void* addr) {
++    _mm_prefetch(static_cast<const char*>(addr), get_intel_hint(RW, LOC));
++}
++#else
++template<PrefetchRw RW = PrefetchRw::READ, PrefetchLoc LOC = PrefetchLoc::HIGH>
++void prefetch(const void* addr) {
++    __builtin_prefetch(addr, static_cast<int>(RW), static_cast<int>(LOC));
++}
++#endif
+ 
+ void start_logger(const std::string& fname);
+ 
+diff --git a/src/nnue/features/full_threats.cpp b/src/nnue/features/full_threats.cpp
+--- a/src/nnue/features/full_threats.cpp
++++ b/src/nnue/features/full_threats.cpp
+@@ -21,6 +21,7 @@
+ #include "full_threats.h"
+ 
+ #include <array>
++#include <cstddef>
+ #include <cstdint>
+ #include <initializer_list>
+ #include <utility>
+@@ -273,13 +274,15 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos,
+ 
+ // Get a list of indices for recently changed features
+ 
+-void FullThreats::append_changed_indices(Color            perspective,
+-                                         Square           ksq,
+-                                         const DiffType&  diff,
+-                                         IndexList&       removed,
+-                                         IndexList&       added,
+-                                         FusedUpdateData* fusedData,
+-                                         bool             first) {
++void FullThreats::append_changed_indices(Color                   perspective,
++                                         Square                  ksq,
++                                         const DiffType&         diff,
++                                         IndexList&              removed,
++                                         IndexList&              added,
++                                         FusedUpdateData*        fusedData,
++                                         bool                    first,
++                                         const ThreatWeightType* prefetchBase,
++                                         IndexType               prefetchStride) {
+ 
+     for (const auto& dirty : diff.list)
+     {
+@@ -324,7 +327,12 @@ void FullThreats::append_changed_indices(Color            perspective,
+         const IndexType index  = make_index(perspective, attacker, from, to, attacked, ksq);
+ 
+         if (index < Dimensions)
++        {
++            if (prefetchBase)
++                prefetch<PrefetchRw::READ, PrefetchLoc::LOW>(
++                  prefetchBase + static_cast<std::ptrdiff_t>(index) * prefetchStride);
+             insert.push_back(index);
++        }
+     }
+ }
+ 
+diff --git a/src/nnue/features/full_threats.h b/src/nnue/features/full_threats.h
+--- a/src/nnue/features/full_threats.h
++++ b/src/nnue/features/full_threats.h
+@@ -86,13 +86,15 @@ class FullThreats {
+     static void append_active_indices(Color perspective, const Position& pos, IndexList& active);
+ 
+     // Get a list of indices for recently changed features
+-    static void append_changed_indices(Color            perspective,
+-                                       Square           ksq,
+-                                       const DiffType&  diff,
+-                                       IndexList&       removed,
+-                                       IndexList&       added,
+-                                       FusedUpdateData* fd    = nullptr,
+-                                       bool             first = false);
++    static void append_changed_indices(Color                   perspective,
++                                       Square                  ksq,
++                                       const DiffType&         diff,
++                                       IndexList&              removed,
++                                       IndexList&              added,
++                                       FusedUpdateData*        fd             = nullptr,
++                                       bool                    first          = false,
++                                       const ThreatWeightType* prefetchBase   = nullptr,
++                                       IndexType               prefetchStride = 0);
+ 
+     // Returns whether the change stored in this DirtyPiece means
+     // that a full accumulator refresh is required.
+diff --git a/src/nnue/nnue_accumulator.cpp b/src/nnue/nnue_accumulator.cpp
+--- a/src/nnue/nnue_accumulator.cpp
++++ b/src/nnue/nnue_accumulator.cpp
+@@ -554,10 +554,12 @@ void double_inc_update(Color                                                   p
+     fusedData.dp2removed = dp2.remove_sq;
+ 
+     ThreatFeatureSet::IndexList removed, added;
++    const auto*                 pfBase   = &featureTransformer.threatWeights[0];
++    auto                        pfStride = static_cast<IndexType>(TransformedFeatureDimensions);
+     ThreatFeatureSet::append_changed_indices(perspective, ksq, middle_state.diff, removed, added,
+-                                             &fusedData, true);
++                                             &fusedData, true, pfBase, pfStride);
+     ThreatFeatureSet::append_changed_indices(perspective, ksq, target_state.diff, removed, added,
+-                                             &fusedData, false);
++                                             &fusedData, false, pfBase, pfStride);
+ 
+     auto updateContext =
+       make_accumulator_update_context(perspective, featureTransformer, computed, target_state);
+@@ -585,10 +587,24 @@ void update_accumulator_incremental(
+     // In this case, the maximum size of both feature addition and removal
+     // is 2, since we are incrementally updating one move at a time.
+     typename FeatureSet::IndexList removed, added;
+-    if constexpr (Forward)
+-        FeatureSet::append_changed_indices(perspective, ksq, target_state.diff, removed, added);
++    if constexpr (std::is_same_v<FeatureSet, ThreatFeatureSet>)
++    {
++        const auto* pfBase   = &featureTransformer.threatWeights[0];
++        auto        pfStride = static_cast<IndexType>(TransformedFeatureDimensions);
++        if constexpr (Forward)
++            FeatureSet::append_changed_indices(perspective, ksq, target_state.diff, removed, added,
++                                               nullptr, false, pfBase, pfStride);
++        else
++            FeatureSet::append_changed_indices(perspective, ksq, computed.diff, added, removed,
++                                               nullptr, false, pfBase, pfStride);
++    }
+     else
+-        FeatureSet::append_changed_indices(perspective, ksq, computed.diff, added, removed);
++    {
++        if constexpr (Forward)
++            FeatureSet::append_changed_indices(perspective, ksq, target_state.diff, removed, added);
++        else
++            FeatureSet::append_changed_indices(perspective, ksq, computed.diff, added, removed);
++    }
+ 
+     auto updateContext =
+       make_accumulator_update_context(perspective, featureTransformer, computed, target_state);

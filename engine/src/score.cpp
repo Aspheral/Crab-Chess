@@ -16,28 +16,33 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <iostream>
-#include <memory>
+#include "score.h"
 
-#include "bitboard.h"
-#include "misc.h"
-#include "position.h"
-#include "tune.h"
+#include <cassert>
+#include <cmath>
+#include <cstdlib>
+
 #include "uci.h"
 
-using namespace Crab;
+namespace Crab {
 
-int main(int argc, char* argv[]) {
-    std::cout << engine_info() << std::endl;
+Score::Score(Value v, const Position& pos) {
+    assert(-VALUE_INFINITE < v && v < VALUE_INFINITE);
 
-    Bitboards::init();
-    Position::init();
+    if (!is_decisive(v))
+    {
+        score = InternalUnits{UCIEngine::to_cp(v, pos)};
+    }
+    else if (std::abs(v) <= VALUE_TB)
+    {
+        auto distance = VALUE_TB - std::abs(v);
+        score         = (v > 0) ? Tablebase{distance, true} : Tablebase{-distance, false};
+    }
+    else
+    {
+        auto distance = VALUE_MATE - std::abs(v);
+        score         = (v > 0) ? Mate{distance} : Mate{-distance};
+    }
+}
 
-    auto uci = std::make_unique<UCIEngine>(argc, argv);
-
-    Tune::init(uci->engine_options());
-
-    uci->loop();
-
-    return 0;
 }
