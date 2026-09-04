@@ -27,14 +27,14 @@ jobs:
       - name: Checkout accepted Crab control
         uses: actions/checkout@v4
         with:
-          ref: 7b35f4213f2e03edb73cad541ecfa4a380391427
+          ref: e8cefaae1523776b4e783e2cb04cfa7389a08433
           path: accepted
           fetch-depth: 0
 
       - name: Checkout candidate base
         uses: actions/checkout@v4
         with:
-          ref: 7b35f4213f2e03edb73cad541ecfa4a380391427
+          ref: e8cefaae1523776b4e783e2cb04cfa7389a08433
           path: candidate
           fetch-depth: 0
 
@@ -71,7 +71,7 @@ jobs:
             echo "experiment=EXP-0011"
             echo "candidate_branch_sha=${{ github.event.pull_request.head.sha }}"
             echo "workflow_checkout_sha=${{ github.sha }}"
-            echo "accepted_crab_baseline=7b35f4213f2e03edb73cad541ecfa4a380391427"
+            echo "accepted_crab_baseline=e8cefaae1523776b4e783e2cb04cfa7389a08433"
             echo "sf18_upstream=cb3d4ee9b47d0c5aae855b12379378ea1439675c"
             echo "upstream_source_patch=5f7348f03f820038f5d246b82de544cbc1d8ffd2"
             echo "sf18_official_bench=2050811"
@@ -194,7 +194,7 @@ jobs:
             'experiment':'EXP-0011',
             'candidate_branch_sha':'${{ github.event.pull_request.head.sha }}',
             'workflow_checkout_sha':'${{ github.sha }}',
-            'accepted_crab_baseline_sha':'7b35f4213f2e03edb73cad541ecfa4a380391427',
+            'accepted_crab_baseline_sha':'e8cefaae1523776b4e783e2cb04cfa7389a08433',
             'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
             'upstream_patch_sha':'5f7348f03f820038f5d246b82de544cbc1d8ffd2',
             'candidate_patch_sha256':read('/tmp/candidate-patch-sha256.txt'),
