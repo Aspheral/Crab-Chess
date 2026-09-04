@@ -1,0 +1,13 @@
+EXP-0011 baselines
+
+Accepted Crab at experiment start:
+e8cefaae1523776b4e783e2cb04cfa7389a08433
+Accepted engine semantics: EXP-0004
+Accepted deterministic bench: 2050811
+
+Immutable upstream comparison:
+Stockfish 18 sf_18
+cb3d4ee9b47d0c5aae855b12379378ea1439675c
+Official deterministic bench: 2050811
+
+Both remain unchanged after EXP-0011 rejection.
