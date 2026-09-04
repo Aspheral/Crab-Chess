@@ -64,6 +64,32 @@ jobs:
           make clean || true
           find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -delete
 
+  strength-tools:
+    name: Strength tools smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile strength helpers
+        run: python3 -m py_compile tools/strength/summarize_match.py tools/strength/run_match.py
+      - name: Verify canonical matched-game command
+        run: |
+          python3 tools/strength/run_match.py \
+            --cutechess /bin/true \
+            --engine-name CrabCandidate \
+            --engine-cmd /bin/true \
+            --opponent-name CrabBaseline \
+            --opponent-cmd /bin/true \
+            --pgn /tmp/dry-run.pgn \
+            --json /tmp/dry-run.json \
+            --dry-run | tee /tmp/strength-dry-run.txt
+          grep -q 'tc=3+0.03' /tmp/strength-dry-run.txt
+          grep -q 'option.Threads=1' /tmp/strength-dry-run.txt
+          grep -q 'option.Hash=64' /tmp/strength-dry-run.txt
+          grep -q -- '-games 2 -rounds 256 -repeat -concurrency 2' /tmp/strength-dry-run.txt
+          grep -q 'order=sequential' /tmp/strength-dry-run.txt
+          grep -q 'plies=8' /tmp/strength-dry-run.txt
+          grep -q 'planned games=512' /tmp/strength-dry-run.txt
+
   exp0004:
     if: ${{ github.head_ref == 'exp/0004-threat-weight-prefetch' }}
     name: EXP-0004 paired Clang AVX2 NPS
