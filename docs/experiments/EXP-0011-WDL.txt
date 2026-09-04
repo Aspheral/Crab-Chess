@@ -1,0 +1,19 @@
+EXP-0011 matched-resource strength screen
+
+Candidate vs accepted Crab
+Games: 512
+W/D/L: 48 / 412 / 52
+Score: 49.609375%
+Elo: -2.714395737316835
+95% CI: [-16.03691574731397, 10.600143021958111]
+Method: draw-aware normal 95% CI; screening estimate, not SPRT
+
+Candidate vs untouched Stockfish 18
+Games: 512
+W/D/L: 49 / 426 / 37
+Score: 51.171875%
+Elo: 8.144513059083152
+95% CI: [-4.183200187428273, 20.492772803753496]
+Method: draw-aware normal 95% CI; screening estimate, not SPRT
+
+Decision: reject. Direct evidence against the latest accepted Crab baseline did not demonstrate improvement. No SF18 parity or superiority claim.
