@@ -1,0 +1,1 @@
+docs_only_archive_pr_pending=true
