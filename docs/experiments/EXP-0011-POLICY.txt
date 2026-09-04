@@ -1,0 +1,9 @@
+EXP-0011 promotion decision rationale
+
+This was a functional search change. Correctness and deterministic-bench requirements passed, but correctness alone is not promotion evidence.
+
+The first matched-resource screen against the latest accepted Crab baseline produced 48 wins, 412 draws, and 52 losses in 512 games, with a -2.7144 Elo point estimate and a 95% interval from -16.0369 to +10.6001 Elo. This result does not demonstrate improvement.
+
+The separate SF18 leg produced a +8.1445 Elo point estimate, but its 95% interval spans -4.1832 to +20.4928 Elo. That result is statistically inconclusive, is not pooled with the accepted-Crab leg, and is not used to claim parity or superiority.
+
+Under Crab's one-hypothesis-at-a-time evidence discipline, EXP-0011 is rejected and the accepted engine is left unchanged.
