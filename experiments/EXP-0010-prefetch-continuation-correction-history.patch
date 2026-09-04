@@ -1,7 +1,7 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -545,6 +545,15 @@ void Search::Worker::do_move(
+@@ -545,5 +545,15 @@ void Search::Worker::do_move(
  void Search::Worker::do_move(
    Position& pos, const Move move, StateInfo& st, const bool givesCheck, Stack* const ss) {
      bool capture = pos.capture_stage(move);
