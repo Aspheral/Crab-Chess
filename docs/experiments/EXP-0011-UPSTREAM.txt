@@ -1,0 +1,17 @@
+EXP-0011 upstream research provenance
+
+Immutable Crab comparison baseline:
+Stockfish 18 tag sf_18
+Commit: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+Official bench: 2050811
+
+Hypothesis source used for research motivation only:
+Stockfish commit: 5f7348f03f820038f5d246b82de544cbc1d8ffd2
+Title: Reduce LMR less aggressively in loose alpha windows
+
+Reported upstream evidence recorded by the experiment:
+STC: 90,784 games, W/D/L 23,707 / 43,758 / 23,319, LLR 2.95 (-2.94,2.94) <0.00,2.00>
+LTC: 209,640 games, W/D/L 54,841 / 100,620 / 54,179, LLR 2.94 (-2.94,2.94) <0.50,2.50>
+Post-change upstream bench: 2132401
+
+These upstream results were not counted as Crab evidence. Crab independently tested the hypothesis and rejected it on its own accepted baseline.
