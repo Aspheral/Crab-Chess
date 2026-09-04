@@ -1,0 +1,7 @@
+EXP-0011 compact audit
+run=33835572850
+artifact=9924767582
+candidate_bench=2347163
+vs_crab=48/412/52,-2.7144,CI[-16.0369,+10.6001]
+vs_sf18=49/426/37,+8.1445,CI[-4.1832,+20.4928]
+decision=REJECTED_NOT_PROMOTED
