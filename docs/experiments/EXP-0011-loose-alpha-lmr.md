@@ -12,7 +12,7 @@
 - Accepted Crab engine semantics: EXP-0004 threat-weight L2 prefetch
 - Candidate branch: `exp/0011-loose-alpha-lmr`
 - Candidate patch: `experiments/EXP-0011-loose-alpha-lmr.patch`
-- Candidate patch SHA-256: `4e01df054eefba1d862c66190f06f291fa6d6f11690f74c373ebe9e96ccd9a8a`
+- Candidate patch SHA-256: `1d8afa8b3e8af624d879ff0c49e71e0625cfdacce544c06a9c9e0e32b5612c3e`
 
 ## Focused hypothesis
 
