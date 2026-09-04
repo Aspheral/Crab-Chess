@@ -35,7 +35,7 @@ namespace Crab {
 class TranspositionTable;
 struct SharedHistories;
 
-// StateInfo struct stores information needed to restore a Position object to
+// StateInfo struct stores information needed to restore a Position object from
 // its previous state when we retract a move. Whenever a move is made on the
 // board (by calling Position::do_move), a StateInfo object must be passed.
 
@@ -333,7 +333,8 @@ inline bool Position::is_chess960() const { return chess960; }
 
 inline bool Position::capture(Move m) const {
     assert(m.is_ok());
-    return (!empty(m.to_sq()) && m.type_of() != CASTLING) || m.type_of() == EN_PASSANT;
+    const MoveType mt = m.type_of();
+    return mt == EN_PASSANT || (mt != CASTLING && board[m.to_sq()] != NO_PIECE);
 }
 
 // Returns true if a move is generated from the capture stage, having also
