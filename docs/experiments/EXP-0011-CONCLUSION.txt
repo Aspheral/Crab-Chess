@@ -1,0 +1,7 @@
+EXP-0011 conclusion
+
+The loose-alpha LMR candidate was technically valid but did not earn promotion.
+
+The accepted-Crab leg is the promotion-critical comparison. Its -2.7144 Elo point estimate with a wide interval crossing zero supplied no positive evidence that the candidate improves current Crab. The separate +8.1445 Elo point estimate against SF18 also crosses zero and therefore cannot support a parity or superiority claim.
+
+Result: reject the candidate, preserve the evidence, keep accepted Crab unchanged, and proceed to a new isolated hypothesis.
