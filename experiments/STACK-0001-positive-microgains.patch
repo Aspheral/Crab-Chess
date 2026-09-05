@@ -1,0 +1,126 @@
+diff --git a/src/evaluate.cpp b/src/evaluate.cpp
+--- a/src/evaluate.cpp
++++ b/src/evaluate.cpp
+@@ -78,7 +78,7 @@ Value Eval::evaluate(const Eval::NNUE::Networks&    networks,
+     nnue -= nnue * nnueComplexity / 18236;
+ 
+     int material = 534 * pos.count<PAWN>() + pos.non_pawn_material();
+-    int v        = (nnue * (77871 + material) + optimism * (7191 + material)) / 77871;
++    int v        = nnue + (nnue * material + optimism * (7191 + material)) / 77871;
+ 
+     // Damp down the evaluation linearly when shuffling
+     v -= v * pos.rule50_count() / 199;
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -545,5 +545,15 @@ void Search::Worker::do_move(
+ void Search::Worker::do_move(
+   Position& pos, const Move move, StateInfo& st, const bool givesCheck, Stack* const ss) {
+     bool capture = pos.capture_stage(move);
++
++    if (ss != nullptr)
++    {
++        const Piece  pc = pos.moved_piece(move);
++        const Square to = move.to_sq();
++
++        prefetch(&(*(ss - 1)->continuationCorrectionHistory)[pc][to]);
++        prefetch(&(*(ss - 3)->continuationCorrectionHistory)[pc][to]);
++    }
++
+     // Preferable over fetch_add to avoid locking instructions
+     nodes.store(nodes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -928,7 +928,7 @@ Value Search::Worker::search(
+     // Step 10. Internal iterative reductions
+     // At sufficient depth, reduce depth for PV/Cut nodes without a TTMove.
+     // (*Scaler) Making IIR more aggressive scales poorly.
+-    if (!allNode && depth >= 6 && !ttData.move && priorReduction <= 3)
++    if (!allNode && depth >= 6 && !ttData.move)
+         depth--;
+ 
+     // Step 11. ProbCut
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -1154,6 +1154,15 @@ Value Search::Worker::search(
+             else if (value >= beta && !is_decisive(value))
+             {
+                 ttMoveHistory << std::max(-400 - 100 * depth, -4000);
++
++                if (!ss->inCheck && value > ss->staticEval)
++                {
++                    const int bonus =
++                      std::clamp(int(value - ss->staticEval) * singularDepth * 177 / 1024,
++                                 -CORRECTION_HISTORY_LIMIT / 4, CORRECTION_HISTORY_LIMIT / 4);
++                    update_correction_history(pos, ss, *this, bonus);
++                }
++
+                 return value;
+             }
+ 
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -1166,14 +1166,10 @@ Value Search::Worker::search(
+             // if the ttMove is singular or can do a multi-cut, so we reduce the
+             // ttMove in favor of other moves based on some conditions:
+ 
+-            // If the ttMove is assumed to fail high over current beta
+-            else if (ttData.value >= beta)
++            // If the ttMove is assumed to fail high over current beta or
++            // if we are on a cutNode
++            else if (ttData.value >= beta || cutNode)
+                 extension = -3;
+-
+-            // If we are on a cutNode but the ttMove is not assumed to fail high
+-            // over current beta
+-            else if (cutNode)
+-                extension = -2;
+         }
+ 
+         // Step 16. Make the move
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -1307,13 +1307,33 @@ Value Search::Worker::search(
+             RootMove& rm = *std::find(rootMoves.begin(), rootMoves.end(), move);
+ 
+             rm.effort += nodes - nodeCount;
+ 
+-            rm.averageScore =
+-              rm.averageScore != -VALUE_INFINITE ? (value + rm.averageScore) / 2 : value;
+-
+-            rm.meanSquaredScore = rm.meanSquaredScore != -VALUE_INFINITE * VALUE_INFINITE
+-                                  ? (value * std::abs(value) + rm.meanSquaredScore) / 2
+-                                  : value * std::abs(value);
++            uint64_t N      = nodes - nodeCount;
++            uint64_t E_prev = std::max(uint64_t(1), rm.effort - N);
++
++            constexpr uint64_t Scale          = 32;
++            constexpr uint64_t ChiNumerator   = 3;
++            constexpr uint64_t ChiDenominator = 2;
++            constexpr uint64_t MinWeight      = 12;
++            constexpr uint64_t MaxWeight      = 24;
++
++            uint64_t w =
++              std::clamp((Scale * N * ChiDenominator)
++                           / (N * ChiDenominator + ChiNumerator * E_prev),
++                         MinWeight, MaxWeight);
++            uint64_t w_mss = std::min(w, uint64_t(16));
++            int64_t  v2    = int64_t(value) * std::abs(value);
++
++            if (rm.averageScore == -VALUE_INFINITE)
++                rm.averageScore = value;
++            else
++                rm.averageScore = Value((value * w + rm.averageScore * (Scale - w)) / Scale);
++
++            if (rm.meanSquaredScore == -VALUE_INFINITE * VALUE_INFINITE)
++                rm.meanSquaredScore = value * std::abs(value);
++            else
++                rm.meanSquaredScore =
++                  Value((v2 * w_mss + int64_t(rm.meanSquaredScore) * (Scale - w_mss)) / Scale);
+ 
+             // PV move or new best move?
+             if (moveCount == 1 || value > alpha)
