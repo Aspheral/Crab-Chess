@@ -1,0 +1,27 @@
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -151,4 +151,16 @@ bool is_shuffling(Move move, Stack* const ss, const Position& pos) {
+         && (ss - 2)->currentMove.from_sq() == (ss - 4)->currentMove.to_sq();
+ }
+ 
++// Look up the futility-pruning cutoff depth. This is a mate-safety guard, not a tuned margin.
++inline int futility_depth(Value eval, Value beta) {
++    static constexpr std::array Lut{Value(1657), 2555, 3294, 4122, 5314, 8194,
++                                    VALUE_INFINITE * 2};
++    const Value prob = std::abs(eval) + std::abs(beta);
++    int         depth = 0;
++    while (Lut[depth] < prob)
++        ++depth;
++
++    return 19 - depth;
++}
++
+ }  // namespace
+@@ -892,3 +904,4 @@ Value Search::Worker::search(
+-        if (!ss->ttPv && depth < 14 && eval - futility_margin(depth) >= beta && eval >= beta
+-            && (!ttData.move || ttCapture) && !is_loss(beta) && !is_win(eval))
++        if (!ss->ttPv && eval - futility_margin(depth) >= beta && eval >= beta
++            && (!ttData.move || ttCapture) && !is_loss(beta) && !is_win(eval)
++            && depth < futility_depth(eval, beta))
+             return (2 * beta + eval) / 3;
