@@ -1,7 +1,7 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -1307,12 +1307,30 @@ Value Search::Worker::search(
+@@ -1307,13 +1307,33 @@ Value Search::Worker::search(
              RootMove& rm = *std::find(rootMoves.begin(), rootMoves.end(), move);
  
              rm.effort += nodes - nodeCount;
