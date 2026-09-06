@@ -8,7 +8,7 @@ diff --git a/src/search.cpp b/src/search.cpp
 +                                                   2984, 3047, 3224, 3419, 3320, 2994, 3138, 3757};
 +
  namespace TB = Tablebases;
-@@ -1092,14 +1096,15 @@ Value Search::Worker::search(
+@@ -1092,15 +1096,16 @@ Value Search::Worker::search(
              else
              {
 +                int dIndex  = std::clamp(int(depth), 1, int(lmrDivisor.size())) - 1;
