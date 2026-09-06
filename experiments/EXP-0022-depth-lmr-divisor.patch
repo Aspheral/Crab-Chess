@@ -1,14 +1,18 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -54,2 +54,6 @@ namespace Crab {
+@@ -51,6 +51,10 @@
+ #include "ucioption.h"
+ 
+ namespace Crab {
  
 +// Preserve Crab's average LMR history scale while shaping it by search depth.
 +static constexpr std::array<int, 16> lmrDivisor = {3452, 3059, 3000, 2942, 3356, 3367, 3366, 2904,
 +                                                   2984, 3047, 3224, 3419, 3320, 2994, 3138, 3757};
 +
  namespace TB = Tablebases;
-@@ -1092,15 +1096,16 @@ Value Search::Worker::search(
+ 
+@@ -1092,17 +1096,18 @@
              else
              {
 +                int dIndex  = std::clamp(int(depth), 1, int(lmrDivisor.size())) - 1;
@@ -25,3 +29,6 @@ diff --git a/src/search.cpp b/src/search.cpp
                  // (*Scaler): Generally, lower divisors scales well
 -                lmrDepth += history / 3208;
 +                lmrDepth += history / lmrDivisor[dIndex];
+ 
+                 Value futilityValue = ss->staticEval + 42 + 161 * !bestMove + 127 * lmrDepth
+                                     + 85 * (ss->staticEval > alpha);
