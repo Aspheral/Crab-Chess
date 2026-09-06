@@ -128,14 +128,20 @@ jobs:
                        if (moveCount == 1 || value > alpha)
           PATCH
 
-          test "$(sha256sum /tmp/candidate.diff | awk '{print $1}')" = "db8376929cf1bdc9502679531bebf3c440eae7f3d54a7088d95ba14af27b11d6"
+          patch_sha=$(sha256sum /tmp/candidate.diff | awk '{print $1}')
+          echo "patch_sha=$patch_sha"
+          test "$patch_sha" = "db8376929cf1bdc9502679531bebf3c440eae7f3d54a7088d95ba14af27b11d6"
           git apply --check /tmp/candidate.diff
           git apply /tmp/candidate.diff
           git add engine/src/evaluate.cpp engine/src/search.cpp
 
-          test "$(git write-tree)" = "5bf84ab4e58423d5672ae57f49f2226740886f2c"
+          tree=$(git write-tree)
+          echo "tree=$tree"
+          test "$tree" = "5bf84ab4e58423d5672ae57f49f2226740886f2c"
           git diff --cached > /tmp/applied.diff
-          test "$(sha256sum /tmp/applied.diff | awk '{print $1}')" = "db8376929cf1bdc9502679531bebf3c440eae7f3d54a7088d95ba14af27b11d6"
+          diff_sha=$(sha256sum /tmp/applied.diff | awk '{print $1}')
+          echo "diff_sha=$diff_sha"
+          test "$diff_sha" = "db8376929cf1bdc9502679531bebf3c440eae7f3d54a7088d95ba14af27b11d6"
 
       - name: Commit exact validated engine diff
         shell: bash
