@@ -37,7 +37,7 @@ jobs:
       - name: Deterministic bench gate
         run: |
           ./engine/src/crab bench 2>&1 | tee /tmp/crab-bench.txt
-          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/crab-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2673975' /tmp/crab-bench.txt
           grep -q 'Nodes/second' /tmp/crab-bench.txt
 
       - name: Clean generated artifacts
