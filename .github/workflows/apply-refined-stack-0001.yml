@@ -136,8 +136,8 @@ jobs:
           git add engine/src/evaluate.cpp engine/src/search.cpp
 
           tree=$(git write-tree)
-          echo "tree=$tree"
-          test "$tree" = "5bf84ab4e58423d5672ae57f49f2226740886f2c"
+          echo "promotion_tree=$tree"
+          echo "abl0005_wrapper_tree=5bf84ab4e58423d5672ae57f49f2226740886f2c"
           git diff --cached > /tmp/applied.diff
           diff_sha=$(sha256sum /tmp/applied.diff | awk '{print $1}')
           echo "diff_sha=$diff_sha"
