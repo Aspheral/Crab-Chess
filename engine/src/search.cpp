@@ -551,6 +551,16 @@ void Search::Worker::do_move(Position& pos, const Move move, StateInfo& st, Stac
 void Search::Worker::do_move(
   Position& pos, const Move move, StateInfo& st, const bool givesCheck, Stack* const ss) {
     bool capture = pos.capture_stage(move);
+
+    if (ss != nullptr)
+    {
+        const Piece  pc = pos.moved_piece(move);
+        const Square to = move.to_sq();
+
+        prefetch(&(*(ss - 1)->continuationCorrectionHistory)[pc][to]);
+        prefetch(&(*(ss - 3)->continuationCorrectionHistory)[pc][to]);
+    }
+
     // Preferable over fetch_add to avoid locking instructions
     nodes.store(nodes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
 
@@ -929,7 +939,7 @@ Value Search::Worker::search(
     // Step 10. Internal iterative reductions
     // At sufficient depth, reduce depth for PV/Cut nodes without a TTMove.
     // (*Scaler) Making IIR more aggressive scales poorly.
-    if (!allNode && depth >= 6 && !ttData.move && priorReduction <= 3)
+    if (!allNode && depth >= 6 && !ttData.move)
         depth--;
 
     // Step 11. ProbCut
@@ -1160,6 +1170,15 @@ moves_loop:  // When in check, search starts here
             else if (value >= beta && !is_decisive(value))
             {
                 ttMoveHistory << std::max(-400 - 100 * depth, -4000);
+
+                if (!ss->inCheck && value > ss->staticEval)
+                {
+                    const int bonus =
+                      std::clamp(int(value - ss->staticEval) * singularDepth * 177 / 1024,
+                                 -CORRECTION_HISTORY_LIMIT / 4, CORRECTION_HISTORY_LIMIT / 4);
+                    update_correction_history(pos, ss, *this, bonus);
+                }
+
                 return value;
             }
 
@@ -1307,12 +1326,32 @@ moves_loop:  // When in check, search starts here
 
             rm.effort += nodes - nodeCount;
 
-            rm.averageScore =
-              rm.averageScore != -VALUE_INFINITE ? (value + rm.averageScore) / 2 : value;
+            uint64_t N      = nodes - nodeCount;
+            uint64_t E_prev = std::max(uint64_t(1), rm.effort - N);
 
-            rm.meanSquaredScore = rm.meanSquaredScore != -VALUE_INFINITE * VALUE_INFINITE
-                                  ? (value * std::abs(value) + rm.meanSquaredScore) / 2
-                                  : value * std::abs(value);
+            constexpr uint64_t Scale          = 32;
+            constexpr uint64_t ChiNumerator   = 3;
+            constexpr uint64_t ChiDenominator = 2;
+            constexpr uint64_t MinWeight      = 12;
+            constexpr uint64_t MaxWeight      = 24;
+
+            uint64_t w =
+              std::clamp((Scale * N * ChiDenominator)
+                           / (N * ChiDenominator + ChiNumerator * E_prev),
+                         MinWeight, MaxWeight);
+            uint64_t w_mss = std::min(w, uint64_t(16));
+            int64_t  v2    = int64_t(value) * std::abs(value);
+
+            if (rm.averageScore == -VALUE_INFINITE)
+                rm.averageScore = value;
+            else
+                rm.averageScore = Value((value * w + rm.averageScore * (Scale - w)) / Scale);
+
+            if (rm.meanSquaredScore == -VALUE_INFINITE * VALUE_INFINITE)
+                rm.meanSquaredScore = value * std::abs(value);
+            else
+                rm.meanSquaredScore =
+                  Value((v2 * w_mss + int64_t(rm.meanSquaredScore) * (Scale - w_mss)) / Scale);
 
             // PV move or new best move?
             if (moveCount == 1 || value > alpha)
