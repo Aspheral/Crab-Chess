@@ -1,14 +1,14 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -53,2 +53,6 @@ namespace Crab {
+@@ -54,2 +54,6 @@ namespace Crab {
  
 +// Preserve Crab's average LMR history scale while shaping it by search depth.
 +static constexpr std::array<int, 16> lmrDivisor = {3452, 3059, 3000, 2942, 3356, 3367, 3366, 2904,
 +                                                   2984, 3047, 3224, 3419, 3320, 2994, 3138, 3757};
 +
  namespace TB = Tablebases;
-@@ -1093,14 +1097,15 @@ Value Search::Worker::search(
+@@ -1092,14 +1096,15 @@ Value Search::Worker::search(
              else
              {
 +                int dIndex  = std::clamp(int(depth), 1, int(lmrDivisor.size())) - 1;
