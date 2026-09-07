@@ -1,0 +1,226 @@
+name: STACK-0002 EXP0025 Ablation
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/STACK-0002-ablation-exp0023.patch'
+      - '.github/workflows/stack0002-exp0025-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ablation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'stack/0002-exp0023-exp0025' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      ACCEPTED_CRAB_SHA: b93ab2b0f635adffb9129c57e6f1cc2e8700720a
+      SF18_SHA: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+      ACCEPTED_CRAB_BENCH: '2673975'
+      SF18_BENCH: '2050811'
+      FULL_PATCH: experiments/STACK-0002-exp0023-exp0025.patch
+      ABLATION_PATCH: experiments/STACK-0002-ablation-exp0023.patch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record provenance and patch identities
+        run: |
+          set -euxo pipefail
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          printf '%s\n' "$ACCEPTED_CRAB_SHA" | tee /tmp/accepted-crab-sha.txt
+          printf '%s\n' "$SF18_SHA" | tee /tmp/sf18-sha.txt
+          sha256sum "$FULL_PATCH" | tee /tmp/full-patch-sha256.txt
+          sha256sum "$ABLATION_PATCH" | tee /tmp/ablation-patch-sha256.txt
+          gcc --version | head -1 | tee /tmp/gcc.txt
+          clang++ --version | head -1 | tee /tmp/clang.txt
+          lscpu | tee /tmp/cpu.txt
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+
+      - name: Verify full-stack and ablation applicability
+        run: |
+          set -euxo pipefail
+          test "$(git merge-base HEAD "$ACCEPTED_CRAB_SHA")" = "$ACCEPTED_CRAB_SHA"
+          git apply --check --directory=engine "$FULL_PATCH"
+          git worktree add --detach /tmp/crab-ablation-src "$ACCEPTED_CRAB_SHA"
+          git -C /tmp/crab-ablation-src apply --check --directory=engine "$GITHUB_WORKSPACE/$ABLATION_PATCH"
+          git -C /tmp/crab-ablation-src apply --directory=engine "$GITHUB_WORKSPACE/$ABLATION_PATCH"
+          test "$(git -C /tmp/crab-ablation-src diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp '
+          git -C /tmp/crab-ablation-src diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/ablation-engine-diff-sha256.txt
+          git -C /tmp/crab-ablation-src add engine/src/search.cpp
+          git -C /tmp/crab-ablation-src write-tree | tee /tmp/ablation-post-patch-tree.txt
+          git apply --directory=engine "$FULL_PATCH"
+          git diff --check
+          test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h '
+          git diff --binary -- engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h | sha256sum | tee /tmp/full-engine-diff-sha256.txt
+          git add engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h
+          git write-tree | tee /tmp/full-post-patch-tree.txt
+
+      - name: Build full stack GCC and Clang reproducibly
+        run: |
+          set -euxo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp engine/src/crab /tmp/crab-full-gcc
+          printf 'uci\nisready\nquit\n' | /tmp/crab-full-gcc | tee /tmp/full-gcc-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/full-gcc-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/full-gcc-uci.txt
+          /tmp/crab-full-gcc bench 2>&1 | tee /tmp/full-gcc-bench.txt
+          grep 'Nodes searched' /tmp/full-gcc-bench.txt | tail -1 | grep -Eo '[0-9]+' | tail -1 | tee /tmp/full-bench-nodes.txt
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-full
+          printf 'uci\nisready\nquit\n' | /tmp/crab-full | tee /tmp/full-clang-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/full-clang-uci.txt
+          /tmp/crab-full bench 2>&1 | tee /tmp/full-clang-bench-1.txt
+          /tmp/crab-full bench 2>&1 | tee /tmp/full-clang-bench-2.txt
+          for f in /tmp/full-clang-bench-1.txt /tmp/full-clang-bench-2.txt; do grep 'Nodes searched' "$f" | tail -1 | grep -Eo '[0-9]+' | tail -1; done | tee /tmp/full-clang-node-runs.txt
+          test "$(sed -n '1p' /tmp/full-clang-node-runs.txt)" = "$(cat /tmp/full-bench-nodes.txt)"
+          test "$(sed -n '2p' /tmp/full-clang-node-runs.txt)" = "$(cat /tmp/full-bench-nodes.txt)"
+          sha256sum /tmp/crab-full | tee /tmp/full-binary-sha256.txt
+
+      - name: Build EXP-0023-only ablation GCC and Clang reproducibly
+        run: |
+          set -euxo pipefail
+          make -C /tmp/crab-ablation-src clean
+          make -C /tmp/crab-ablation-src -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp /tmp/crab-ablation-src/engine/src/crab /tmp/crab-ablation-gcc
+          printf 'uci\nisready\nquit\n' | /tmp/crab-ablation-gcc | tee /tmp/ablation-gcc-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/ablation-gcc-uci.txt
+          /tmp/crab-ablation-gcc bench 2>&1 | tee /tmp/ablation-gcc-bench.txt
+          grep 'Nodes searched' /tmp/ablation-gcc-bench.txt | tail -1 | grep -Eo '[0-9]+' | tail -1 | tee /tmp/ablation-bench-nodes.txt
+          test "$(cat /tmp/ablation-bench-nodes.txt)" = '2146293'
+          make -C /tmp/crab-ablation-src clean
+          make -C /tmp/crab-ablation-src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/crab-ablation-src/engine/src/crab /tmp/crab-ablation
+          printf 'uci\nisready\nquit\n' | /tmp/crab-ablation | tee /tmp/ablation-clang-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/ablation-clang-uci.txt
+          /tmp/crab-ablation bench 2>&1 | tee /tmp/ablation-clang-bench-1.txt
+          /tmp/crab-ablation bench 2>&1 | tee /tmp/ablation-clang-bench-2.txt
+          for f in /tmp/ablation-clang-bench-1.txt /tmp/ablation-clang-bench-2.txt; do grep 'Nodes searched' "$f" | tail -1 | grep -Eo '[0-9]+' | tail -1; done | tee /tmp/ablation-clang-node-runs.txt
+          test "$(sed -n '1p' /tmp/ablation-clang-node-runs.txt)" = '2146293'
+          test "$(sed -n '2p' /tmp/ablation-clang-node-runs.txt)" = '2146293'
+          sha256sum /tmp/crab-ablation | tee /tmp/ablation-binary-sha256.txt
+
+      - name: Sanitizer smoke both variants
+        run: |
+          set -euxo pipefail
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 sh -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab"
+          make -C /tmp/crab-ablation-src clean
+          make -C /tmp/crab-ablation-src -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 sh -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | /tmp/crab-ablation-src/engine/src/crab"
+
+      - name: Build immutable controls and verify networks
+        run: |
+          set -euxo pipefail
+          git worktree add --detach /tmp/crab-baseline-src "$ACCEPTED_CRAB_SHA"
+          make -C /tmp/crab-baseline-src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/crab-baseline-src/engine/src/crab /tmp/crab-baseline
+          /tmp/crab-baseline bench 2>&1 | tee /tmp/baseline-bench.txt
+          grep -Eq "Nodes searched[[:space:]]*:[[:space:]]*$ACCEPTED_CRAB_BENCH" /tmp/baseline-bench.txt
+          printf 'uci\nisready\nquit\n' | /tmp/crab-baseline | grep -q '^id name Crab Chess '
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach "$SF18_SHA"
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = "$SF18_SHA"
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq "Nodes searched[[:space:]]*:[[:space:]]*$SF18_BENCH" /tmp/sf18-bench.txt
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/full-network-sha256.txt
+          find /tmp/crab-ablation-src/engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/ablation-network-sha256.txt
+          find /tmp/crab-baseline-src/engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/baseline-network-sha256.txt
+          find /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/sf18-network-sha256.txt
+          test "$(cut -d' ' -f1 /tmp/full-network-sha256.txt | tr '\n' ' ')" = "$(cut -d' ' -f1 /tmp/ablation-network-sha256.txt | tr '\n' ' ')"
+          test "$(cut -d' ' -f1 /tmp/full-network-sha256.txt | tr '\n' ' ')" = "$(cut -d' ' -f1 /tmp/baseline-network-sha256.txt | tr '\n' ' ')"
+          test "$(cut -d' ' -f1 /tmp/full-network-sha256.txt | tr '\n' ' ')" = "$(cut -d' ' -f1 /tmp/sf18-network-sha256.txt | tr '\n' ' ')"
+
+      - name: Build pinned Cute Chess
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          cp /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-sha.txt
+
+      - name: Direct full-stack vs EXP-0023-only ablation
+        run: |
+          set -euxo pipefail
+          /tmp/cutechess-cli -engine name=CrabFull cmd=/tmp/crab-full proto=uci -engine name=CrabAblation0023 cmd=/tmp/crab-ablation proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/full-vs-ablation.pgn
+          python3 tools/strength/summarize_match.py /tmp/full-vs-ablation.pgn --engine CrabFull --opponent CrabAblation0023 --json /tmp/full-vs-ablation.json
+          cat /tmp/full-vs-ablation.json
+
+      - name: Full stack vs immutable SF18 matched context
+        run: |
+          set -euxo pipefail
+          /tmp/cutechess-cli -engine name=CrabFull cmd=/tmp/crab-full proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/full-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/full-vs-sf18.pgn --engine CrabFull --opponent Stockfish18 --json /tmp/full-vs-sf18.json
+          cat /tmp/full-vs-sf18.json
+
+      - name: EXP-0023-only ablation vs immutable SF18 matched context
+        run: |
+          set -euxo pipefail
+          /tmp/cutechess-cli -engine name=CrabAblation0023 cmd=/tmp/crab-ablation proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/ablation-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/ablation-vs-sf18.pgn --engine CrabAblation0023 --opponent Stockfish18 --json /tmp/ablation-vs-sf18.json
+          cat /tmp/ablation-vs-sf18.json
+
+      - name: Write audit manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          def r(p):
+              q=pathlib.Path(p)
+              return q.read_text().strip() if q.exists() else None
+          m={
+            'experiment':'STACK-0002 EXP-0025 component ablation',
+            'full_components':['EXP-0023','EXP-0025'],
+            'ablation_components':['EXP-0023'],
+            'wrapper_sha':r('/tmp/wrapper-sha.txt'),
+            'accepted_crab_sha':r('/tmp/accepted-crab-sha.txt'),
+            'immutable_sf18_sha':r('/tmp/sf18-sha.txt'),
+            'full_patch_sha256':r('/tmp/full-patch-sha256.txt'),
+            'ablation_patch_sha256':r('/tmp/ablation-patch-sha256.txt'),
+            'full_engine_diff_sha256':r('/tmp/full-engine-diff-sha256.txt'),
+            'ablation_engine_diff_sha256':r('/tmp/ablation-engine-diff-sha256.txt'),
+            'full_post_patch_tree':r('/tmp/full-post-patch-tree.txt'),
+            'ablation_post_patch_tree':r('/tmp/ablation-post-patch-tree.txt'),
+            'full_bench_nodes':r('/tmp/full-bench-nodes.txt'),
+            'ablation_bench_nodes':r('/tmp/ablation-bench-nodes.txt'),
+            'accepted_crab_bench_nodes':2673975,
+            'official_sf18_bench_nodes':2050811,
+            'gcc':r('/tmp/gcc.txt'),'clang':r('/tmp/clang.txt'),'cpu':r('/tmp/cpu.txt'),
+            'full_binary_sha256':r('/tmp/full-binary-sha256.txt'),
+            'ablation_binary_sha256':r('/tmp/ablation-binary-sha256.txt'),
+            'opening_checksum':r('/tmp/openings-sha256.txt'),'cutechess_sha':r('/tmp/cutechess-sha.txt'),
+            'threads':1,'hash_mb':64,'time_control':'3+0.03','concurrency':2,
+            'games_per_leg':512,'opening_policy':'sequential 8 plies, repeated colors','adjudication':'none'
+          }
+          pathlib.Path('/tmp/audit.json').write_text(json.dumps(m,indent=2)+'\n')
+          print(json.dumps(m,indent=2))
+          PY
+
+      - name: Upload component-ablation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack0002-exp0025-component-ablation-evidence
+          path: |
+            /tmp/audit.json
+            /tmp/full-vs-ablation.json
+            /tmp/full-vs-ablation.pgn
+            /tmp/full-vs-sf18.json
+            /tmp/full-vs-sf18.pgn
+            /tmp/ablation-vs-sf18.json
+            /tmp/ablation-vs-sf18.pgn
+            /tmp/*bench*.txt
+            /tmp/*sha256.txt
+            /tmp/*post-patch-tree.txt
+            /tmp/cutechess-sha.txt
