@@ -25,7 +25,7 @@ diff --git a/src/tt.cpp b/src/tt.cpp
  
      uint16_t key16;
      uint8_t  depth8;
-@@ -128,6 +129,11 @@ void TTWriter::write(
+@@ -128,5 +129,10 @@ void TTWriter::write(
      entry->save(k, v, pv, b, d, m, ev, generation8);
  }
  
@@ -46,3 +46,4 @@ diff --git a/src/tt.h b/src/tt.h
  
     private:
      friend class TranspositionTable;
+     TTEntry* entry;
