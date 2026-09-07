@@ -1,0 +1,48 @@
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -807,6 +807,12 @@ Value Search::Worker::search(
+             else
+                 return ttData.value;
+         }
++    }  // No cutoff, but why? Does the stored inexact value mismatch our aspiration window?
++    else if (!PvNode && !excludedMove && ttData.depth > depth - (ttData.value <= beta)
++             && is_valid(ttData.value) && ttData.bound != BOUND_EXACT
++             && ttData.bound & (ttData.value >= beta ? BOUND_UPPER : BOUND_LOWER) && depth > 5)
++    {  // If a window-bound mismatch is the only reason cutoff failed, penalize the now-useless tte
++        ttWriter.penalize(1);
+     }
+ 
+     // Step 5. Tablebases probe
+diff --git a/src/tt.cpp b/src/tt.cpp
+--- a/src/tt.cpp
++++ b/src/tt.cpp
+@@ -63,6 +63,7 @@ struct TTEntry {
+ 
+    private:
+     friend class TranspositionTable;
++    friend struct TTWriter;
+ 
+     uint16_t key16;
+     uint8_t  depth8;
+@@ -128,6 +129,11 @@ void TTWriter::write(
+     entry->save(k, v, pv, b, d, m, ev, generation8);
+ }
+ 
++void TTWriter::penalize(int penalty) {
++    assert(entry->depth8 + DEPTH_NONE > penalty);
++    entry->depth8 -= penalty;
++}
++
+ 
+ // A TranspositionTable is an array of Cluster, of size clusterCount. Each cluster consists of ClusterSize number
+diff --git a/src/tt.h b/src/tt.h
+--- a/src/tt.h
++++ b/src/tt.h
+@@ -68,6 +68,7 @@ struct TTWriter {
+    public:
+     void write(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, uint8_t generation8);
++    void penalize(int penalty);  // decrement stored depth by the penalty
+ 
+    private:
+     friend class TranspositionTable;
