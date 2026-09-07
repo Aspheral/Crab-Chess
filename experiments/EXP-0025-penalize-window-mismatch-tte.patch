@@ -30,7 +30,7 @@ diff --git a/src/tt.cpp b/src/tt.cpp
  }
  
 +void TTWriter::penalize(int penalty) {
-+    assert(entry->depth8 + DEPTH_NONE > penalty);
++    assert(entry->depth8 + DEPTH_ENTRY_OFFSET > penalty);
 +    entry->depth8 -= penalty;
 +}
 +
