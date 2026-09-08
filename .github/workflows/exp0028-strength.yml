@@ -1,0 +1,182 @@
+name: EXP-0028 Strength Screen
+
+on:
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'experiments/EXP-0028.md'
+      - '.github/workflows/exp0028-strength.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matched-strength:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'exp/0028-integer-mtg' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build pinned Cute Chess runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          /tmp/cutechess-cli --version || /tmp/cutechess-cli -version || true
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
+
+      - name: Record provenance
+        env:
+          ACCEPTED_CRAB_SHA: dff78780c450443a3719a49419524ac04c0044c7
+          IMMUTABLE_SF18_SHA: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          ENGINE_COMMIT_SHA: bbaa16c4a77799082d8d6eee447e7090e64b906b
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          clang++ --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/candidate-wrapper-sha.txt
+          printf '%s\n' "$ENGINE_COMMIT_SHA" | tee /tmp/candidate-engine-commit-sha.txt
+          printf '%s\n' "$ACCEPTED_CRAB_SHA" | tee /tmp/accepted-crab-sha.txt
+          printf '%s\n' "$IMMUTABLE_SF18_SHA" | tee /tmp/sf18-sha.txt
+          git diff "$ACCEPTED_CRAB_SHA" -- engine | sha256sum | tee /tmp/candidate-engine-diff-sha256.txt
+          git rev-parse HEAD^{tree} | tee /tmp/candidate-tree.txt
+
+      - name: Build EXP-0028 candidate
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-candidate
+          sha256sum /tmp/crab-candidate | tee /tmp/candidate-binary-sha256.txt
+          printf 'uci\nquit\n' | /tmp/crab-candidate | tee /tmp/candidate-uci.txt
+          grep -Eq '^id name Crab' /tmp/candidate-uci.txt
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/candidate-bench.txt
+
+      - name: Build accepted Crab control
+        run: |
+          git worktree add --detach /tmp/crab-baseline-src dff78780c450443a3719a49419524ac04c0044c7
+          make -C /tmp/crab-baseline-src clean
+          make -C /tmp/crab-baseline-src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/crab-baseline-src/engine/src/crab /tmp/crab-baseline
+          sha256sum /tmp/crab-baseline | tee /tmp/baseline-binary-sha256.txt
+          printf 'uci\nquit\n' | /tmp/crab-baseline | tee /tmp/baseline-uci.txt
+          grep -Eq '^id name Crab' /tmp/baseline-uci.txt
+          /tmp/crab-baseline bench 2>&1 | tee /tmp/baseline-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/baseline-bench.txt
+
+      - name: Build immutable Stockfish 18 control
+        run: |
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          sha256sum /tmp/sf18 | tee /tmp/sf18-binary-sha256.txt
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
+
+      - name: Verify network and opening checksums
+        run: |
+          find engine/src /tmp/crab-baseline-src/engine/src /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/network-sha256.txt
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+
+      - name: EXP-0028 vs accepted Crab
+        run: |
+          /tmp/cutechess-cli \
+            -engine name=CrabEXP0028 cmd=/tmp/crab-candidate proto=uci \
+            -engine name=CrabAccepted cmd=/tmp/crab-baseline proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
+            -pgnout /tmp/exp0028-vs-crab.pgn
+          python3 tools/strength/summarize_match.py /tmp/exp0028-vs-crab.pgn \
+            --engine CrabEXP0028 --opponent CrabAccepted --json /tmp/exp0028-vs-crab.json
+          grep -ci 'time forfeit' /tmp/exp0028-vs-crab.pgn | tee /tmp/exp0028-vs-crab-time-forfeits.txt || true
+
+      - name: EXP-0028 vs immutable SF18
+        run: |
+          /tmp/cutechess-cli \
+            -engine name=CrabEXP0028 cmd=/tmp/crab-candidate proto=uci \
+            -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
+            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
+            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
+            -games 2 -rounds 256 -repeat -concurrency 2 \
+            -pgnout /tmp/exp0028-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/exp0028-vs-sf18.pgn \
+            --engine CrabEXP0028 --opponent Stockfish18 --json /tmp/exp0028-vs-sf18.json
+          grep -ci 'time forfeit' /tmp/exp0028-vs-sf18.pgn | tee /tmp/exp0028-vs-sf18-time-forfeits.txt || true
+
+      - name: Write audit manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          def read(p):
+              q=pathlib.Path(p)
+              return q.read_text().strip() if q.exists() else None
+          manifest={
+            'experiment':'EXP-0028',
+            'candidate_wrapper_sha':read('/tmp/candidate-wrapper-sha.txt'),
+            'candidate_engine_commit_sha':read('/tmp/candidate-engine-commit-sha.txt'),
+            'candidate_tree':read('/tmp/candidate-tree.txt'),
+            'accepted_crab_sha':read('/tmp/accepted-crab-sha.txt'),
+            'immutable_sf18_sha':read('/tmp/sf18-sha.txt'),
+            'candidate_engine_diff_sha256':read('/tmp/candidate-engine-diff-sha256.txt'),
+            'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),
+            'baseline_binary_sha256':read('/tmp/baseline-binary-sha256.txt'),
+            'sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),
+            'accepted_crab_bench':2146293,
+            'candidate_expected_bench':2146293,
+            'official_sf18_bench':2050811,
+            'threads':1,
+            'hash_mb':64,
+            'time_control':'3+0.03',
+            'concurrency':2,
+            'games_per_match_planned':512,
+            'opening_order':'sequential, 8 plies, repeated colors',
+            'adjudication':'none',
+            'match_runner':'Cute Chess v1.3.1',
+            'match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),
+            'compiler':read('/tmp/compiler.txt'),
+            'host':read('/tmp/host.txt'),
+            'network_checksums':read('/tmp/network-sha256.txt'),
+            'opening_checksum':read('/tmp/openings-sha256.txt'),
+            'candidate_vs_crab_time_forfeits_total':read('/tmp/exp0028-vs-crab-time-forfeits.txt'),
+            'candidate_vs_sf18_time_forfeits_total':read('/tmp/exp0028-vs-sf18-time-forfeits.txt'),
+          }
+          pathlib.Path('/tmp/exp0028-audit.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          print(json.dumps(manifest,indent=2))
+          PY
+
+      - name: Upload EXP-0028 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0028-strength-evidence
+          path: |
+            /tmp/exp0028-audit.json
+            /tmp/exp0028-vs-crab.json
+            /tmp/exp0028-vs-sf18.json
+            /tmp/exp0028-vs-crab.pgn
+            /tmp/exp0028-vs-sf18.pgn
+            /tmp/candidate-bench.txt
+            /tmp/baseline-bench.txt
+            /tmp/sf18-bench.txt
+            /tmp/candidate-uci.txt
+            /tmp/baseline-uci.txt
+            /tmp/network-sha256.txt
+            /tmp/openings-sha256.txt
+            /tmp/cutechess-runner-sha.txt
+            /tmp/candidate-engine-diff-sha256.txt
+            /tmp/candidate-binary-sha256.txt
+            /tmp/baseline-binary-sha256.txt
+            /tmp/sf18-binary-sha256.txt
+            /tmp/exp0028-vs-crab-time-forfeits.txt
+            /tmp/exp0028-vs-sf18-time-forfeits.txt
