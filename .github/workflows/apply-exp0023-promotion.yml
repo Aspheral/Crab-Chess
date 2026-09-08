@@ -1,0 +1,64 @@
+name: Apply EXP-0023 promotion
+
+on:
+  push:
+    branches:
+      - automation/apply-exp0023-promotion
+
+permissions:
+  contents: write
+
+jobs:
+  apply-validated-engine-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out clean promotion branch
+        uses: actions/checkout@v4
+        with:
+          ref: promote/stack-0002-exp0023
+          fetch-depth: 0
+
+      - name: Verify accepted baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b93ab2b0f635adffb9129c57e6f1cc2e8700720a"
+
+      - name: Apply exact validated EXP-0023 engine diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/candidate.diff <<'PATCH'
+          diff --git a/engine/src/search.cpp b/engine/src/search.cpp
+          --- a/engine/src/search.cpp
+          +++ b/engine/src/search.cpp
+          @@ -883,7 +883,7 @@ Value Search::Worker::search(
+               // Step 7. Razoring
+               // If eval is really low, skip search entirely and return the qsearch value.
+               // For PvNodes, we must have a guard against mates being returned.
+          -    if (!PvNode && eval < alpha - 485 - 281 * depth * depth)
+          +    if (!PvNode && eval < alpha - 482 * depth * depth)
+                   return qsearch<NonPV>(pos, ss, alpha, beta);
+           
+               // Step 8. Futility pruning: child node
+          PATCH
+
+          git apply --check /tmp/candidate.diff
+          git apply /tmp/candidate.diff
+          git add engine/src/search.cpp
+          git diff --cached > /tmp/applied.diff
+          diff_sha=$(sha256sum /tmp/applied.diff | awk '{print $1}')
+          echo "engine_diff_sha256=$diff_sha"
+          test "$diff_sha" = "59867c6325ab6bc0d1292a1c41715b5da3dbf1bd0701454addd5d41b35e809cc"
+
+          changed=$(git diff --cached --name-only)
+          test "$changed" = "engine/src/search.cpp"
+
+      - name: Commit exact validated engine diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Crab Chess Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Promote EXP-0023 razoring refinement"
+          git push origin HEAD:refs/heads/promote/stack-0002-exp0023
