@@ -13,14 +13,14 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-files = sorted((root / "engine" / "src").glob("*.cpp"))
+files = sorted((root / "engine").rglob("*.cpp"))
 
-# Match the actual Stockfish/Crab null-move copy sequence while tolerating
-# spacing differences in aligned assignments.
+# Match the audited null-move copy sequence while tolerating blank lines,
+# alignment, and whitespace differences in the surrounding assignments.
 anchor_re = re.compile(
-    r"(?P<prefix>^[ \t]*std::memcpy\(&newSt, st, sizeof\(StateInfo\)\);\s*\n\s*"
-    r"newSt\.previous\s*=\s*st;\s*\n)"
-    r"(?P<tail>^[ \t]*st\s*=\s*&newSt;\s*$)",
+    r"(?P<prefix>^[ \t]*std::memcpy\s*\(\s*&newSt\s*,\s*st\s*,\s*sizeof\s*\(\s*StateInfo\s*\)\s*\)\s*;[ \t]*(?:\r?\n|\r)+"
+    r"[ \t]*newSt\.previous\s*=\s*st\s*;[ \t]*(?:\r?\n|\r)+)"
+    r"(?P<tail>[ \t]*st\s*=\s*&newSt\s*;[ \t]*$)",
     re.MULTILINE,
 )
 new_line = "    newSt.capturedPiece = NO_PIECE;"
@@ -35,7 +35,7 @@ if len(matches) != 1:
     raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(matches)}")
 
 path, text = matches[0]
-if re.search(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE;[ \t]*$", text, re.MULTILINE):
+if re.search(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE\s*;[ \t]*$", text, re.MULTILINE):
     raise SystemExit("EXP-0033 already applied")
 
 match = anchor_re.search(text)
