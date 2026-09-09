@@ -15,10 +15,12 @@ import sys
 root = Path(sys.argv[1])
 files = sorted((root / "engine" / "src").glob("*.cpp"))
 
+# Match the actual Stockfish/Crab null-move copy sequence while tolerating
+# spacing differences in aligned assignments.
 anchor_re = re.compile(
-    r"(?P<memcpy>^[ \t]*std::memcpy\(&newSt, st, sizeof\(StateInfo\)\);\n\n"
-    r"^[ \t]*newSt\.previous = st;\n)"
-    r"(?P<tail>^[ \t]*st[ \t]*=[ \t]*&newSt;)$",
+    r"(?P<prefix>^[ \t]*std::memcpy\(&newSt, st, sizeof\(StateInfo\)\);\s*\n\s*"
+    r"newSt\.previous\s*=\s*st;\s*\n)"
+    r"(?P<tail>^[ \t]*st\s*=\s*&newSt;\s*$)",
     re.MULTILINE,
 )
 new_line = "    newSt.capturedPiece = NO_PIECE;"
@@ -33,12 +35,12 @@ if len(matches) != 1:
     raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(matches)}")
 
 path, text = matches[0]
-if re.search(r"^[ \t]*newSt\.capturedPiece = NO_PIECE;[ \t]*$", text, re.MULTILINE):
+if re.search(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE;[ \t]*$", text, re.MULTILINE):
     raise SystemExit("EXP-0033 already applied")
 
 match = anchor_re.search(text)
 assert match is not None
-replacement = match.group("memcpy") + new_line + "\n" + match.group("tail")
+replacement = match.group("prefix") + new_line + "\n" + match.group("tail")
 text = text[:match.start()] + replacement + text[match.end():]
 path.write_text(text, encoding="utf-8")
 print(path)
