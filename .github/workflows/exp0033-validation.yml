@@ -37,7 +37,7 @@ jobs:
           import re
           import sys
           root = Path(sys.argv[1])
-          pattern = re.compile(r"^[ \\t]*newSt\\.capturedPiece\\s*=\\s*NO_PIECE;[ \\t]*$", re.MULTILINE)
+          pattern = re.compile(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE;[ \t]*$", re.MULTILINE)
           hits = []
           for path in sorted(root.rglob("*.cpp")):
               text = path.read_text(encoding="utf-8")
@@ -63,5 +63,5 @@ jobs:
           cp -a . "$tmpdir/crab"
           experiments/EXP-0033-nullmove-capturedpiece.apply.sh "$tmpdir/crab"
           make -C "$tmpdir/crab" build ARCH=x86-64 COMP=gcc JOBS=2
-          printf 'uci\\nquit\\n' | "$tmpdir/crab/engine/src/crab" | tee /tmp/crab-uci.txt
+          printf 'uci\nquit\n' | "$tmpdir/crab/engine/src/crab" | tee /tmp/crab-uci.txt
           grep -Fq 'id name Crab Chess' /tmp/crab-uci.txt
