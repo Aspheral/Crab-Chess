@@ -14,8 +14,8 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-old = "    newSt.previous = st;\n    st             = &newSt;"
-new = "    newSt.previous = st;\n    newSt.capturedPiece = NO_PIECE;\n    st             = &newSt;"
+old = "    std::memcpy(&newSt, st, sizeof(StateInfo));\n\n    newSt.previous = st;\n    st             = &newSt;"
+new = "    std::memcpy(&newSt, st, sizeof(StateInfo));\n\n    newSt.previous = st;\n    newSt.capturedPiece = NO_PIECE;\n    st             = &newSt;"
 
 if new in text:
     raise SystemExit("EXP-0033 already applied")
@@ -25,4 +25,4 @@ if text.count(old) != 1:
 path.write_text(text.replace(old, new), encoding="utf-8")
 PY
 
-grep -A5 -B2 -n "newSt.previous" "$FILE"
+grep -A6 -B2 -n "newSt.previous" "$FILE"
