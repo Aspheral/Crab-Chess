@@ -32,9 +32,9 @@ jobs:
           tmpdir="$(mktemp -d)"
           cp -a engine "$tmpdir/engine"
           experiments/EXP-0033-nullmove-capturedpiece.apply.sh "$tmpdir"
-          patched="$(grep -R -l -F 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/engine/src" --include='*.cpp')"
+          patched="$(grep -R -l -F 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/engine" --include='*.cpp')"
           test -n "$patched"
-          test "$(grep -R -l -F 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/engine/src" --include='*.cpp' | wc -l)" -eq 1
+          test "$(grep -R -l -F 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/engine" --include='*.cpp' | wc -l)" -eq 1
           test "$(grep -Fc 'newSt.capturedPiece = NO_PIECE;' "$patched")" -eq 1
 
       - name: Build candidate copy
