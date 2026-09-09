@@ -1,0 +1,11 @@
+diff --git a/engine/src/position.cpp b/engine/src/position.cpp
+--- a/engine/src/position.cpp
++++ b/engine/src/position.cpp
+@@ -1254,6 +1254,7 @@ void Position::do_null_move(StateInfo& newSt, const TranspositionTable& tt) {
+     std::memcpy(&newSt, st, sizeof(StateInfo));
+ 
+     newSt.previous = st;
++    newSt.capturedPiece = NO_PIECE;
+     st             = &newSt;
+ 
+     if (st->epSquare != SQ_NONE)
