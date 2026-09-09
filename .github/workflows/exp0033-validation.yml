@@ -1,0 +1,52 @@
+name: EXP-0033 validation
+
+on:
+  push:
+    branches:
+      - experiment/exp0033-nullmove-capturedpiece
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  guarded-candidate-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record provenance
+        run: |
+          git rev-parse HEAD
+          git rev-parse main
+
+      - name: Verify guarded patch harness
+        run: |
+          test -x tools/experiments/apply-exp0033-nullmove-capturedpiece.sh
+          tmpdir="$(mktemp -d)"
+          cp -a engine/src "$tmpdir/src"
+          tools/experiments/apply-exp0033-nullmove-capturedpiece.sh "$tmpdir"
+          grep -Fq 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/src/position.cpp"
+          test "$(grep -Fc 'newSt.capturedPiece = NO_PIECE;' "$tmpdir/src/position.cpp")" -eq 1
+
+      - name: Build candidate copy
+        run: |
+          tmpdir="$(mktemp -d)"
+          cp -a . "$tmpdir/crab"
+          tools/experiments/apply-exp0033-nullmove-capturedpiece.sh "$tmpdir/crab"
+          make -C "$tmpdir/crab" build ARCH=x86-64 COMP=gcc JOBS=2
+          test -x "$tmpdir/crab/engine/src/crab"
+
+      - name: Verify Crab UCI identity
+        run: |
+          tmpdir="$(mktemp -d)"
+          cp -a . "$tmpdir/crab"
+          tools/experiments/apply-exp0033-nullmove-capturedpiece.sh "$tmpdir/crab"
+          make -C "$tmpdir/crab" build ARCH=x86-64 COMP=gcc JOBS=2
+          printf 'uci\nquit\n' | "$tmpdir/crab/engine/src/crab" | tee /tmp/crab-uci.txt
+          grep -Fq 'id name Crab Chess' /tmp/crab-uci.txt
