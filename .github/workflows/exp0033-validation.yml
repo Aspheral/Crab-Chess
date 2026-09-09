@@ -23,7 +23,7 @@ jobs:
       - name: Record provenance
         run: |
           git rev-parse HEAD
-          git rev-parse main
+          git rev-parse origin/main
 
       - name: Verify guarded patch harness
         run: |
