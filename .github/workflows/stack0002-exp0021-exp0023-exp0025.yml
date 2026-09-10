@@ -32,17 +32,35 @@ jobs:
           git rev-parse HEAD | tee /tmp/wrapper-sha.txt
           printf '%s\n' "$ACCEPTED_CRAB_SHA" | tee /tmp/accepted-crab-sha.txt
           printf '%s\n' "$SF18_SHA" | tee /tmp/sf18-sha.txt
-          sha256sum "$PATCH" | tee /tmp/patch-sha256.txt
+          sha256sum "$PATCH" | tee /tmp/patch-container-sha256.txt
           gcc --version | head -1 | tee /tmp/gcc.txt
           clang++ --version | head -1 | tee /tmp/clang.txt
           lscpu | tee /tmp/cpu.txt
 
-      - name: Verify and apply candidate
+      - name: Verify and normalize candidate patch
         run: |
           set -euxo pipefail
           test "$(git merge-base HEAD "$ACCEPTED_CRAB_SHA")" = "$ACCEPTED_CRAB_SHA"
-          git apply --check --directory=engine "$PATCH"
-          git apply --directory=engine "$PATCH"
+          python3 - "$PATCH" /tmp/candidate.patch <<'PY'
+          import json, pathlib, sys
+          src = pathlib.Path(sys.argv[1])
+          dst = pathlib.Path(sys.argv[2])
+          raw = src.read_text(encoding='utf-8-sig')
+          try:
+              obj = json.loads(raw)
+          except json.JSONDecodeError:
+              normalized = raw
+          else:
+              if not isinstance(obj, dict) or not isinstance(obj.get('content'), str):
+                  raise SystemExit('Patch container JSON is missing string field: content')
+              normalized = obj['content']
+          if not normalized.startswith('diff --git '):
+              raise SystemExit('Normalized candidate patch does not start with a unified diff')
+          dst.write_text(normalized, encoding='utf-8', newline='\n')
+          PY
+          sha256sum /tmp/candidate.patch | tee /tmp/patch-normalized-sha256.txt
+          git apply --check --directory=engine /tmp/candidate.patch
+          git apply --directory=engine /tmp/candidate.patch
           git diff --check
           test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h '
           git diff --binary -- engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h | sha256sum | tee /tmp/engine-diff-sha256.txt
@@ -153,11 +171,12 @@ jobs:
           m={
             'experiment':'STACK-0002',
             'components':['EXP-0021','EXP-0023','EXP-0025'],
-            'note':'EXP-0023 is already present in accepted main; candidate patch applies only the new EXP-0021 and EXP-0025 deltas to avoid double application.',
+            'note':'EXP-0023 is already present in accepted main; candidate patch applies only the new EXP-0021 and EXP-0025 deltas to avoid double application. The stored patch is normalized from its JSON content container before git apply.',
             'wrapper_sha':r('/tmp/wrapper-sha.txt'),
             'accepted_crab_sha':r('/tmp/accepted-crab-sha.txt'),
             'immutable_sf18_sha':r('/tmp/sf18-sha.txt'),
-            'patch_sha256':r('/tmp/patch-sha256.txt'),
+            'patch_container_sha256':r('/tmp/patch-container-sha256.txt'),
+            'patch_normalized_sha256':r('/tmp/patch-normalized-sha256.txt'),
             'engine_diff_sha256':r('/tmp/engine-diff-sha256.txt'),
             'post_patch_tree':r('/tmp/post-patch-tree.txt'),
             'candidate_bench':r('/tmp/candidate-bench.txt'),
