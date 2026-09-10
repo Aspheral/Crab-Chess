@@ -60,6 +60,9 @@ jobs:
       - name: Build current Crab candidate
         run: |
           set -euo pipefail
+          git apply --check --directory=engine experiments/EXP-0034-dynamic-nmp-reduction.patch
+          git apply --directory=engine experiments/EXP-0034-dynamic-nmp-reduction.patch
+          git diff --binary -- engine | sha256sum | tee /tmp/candidate-engine-diff-sha256.txt
           make clean
           make -j2 build ARCH=x86-64-avx2 COMP=clang
           cp engine/src/crab /tmp/crab-candidate
@@ -97,6 +100,7 @@ jobs:
           set -euo pipefail
           find engine/src /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/network-sha256.txt
           sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+          sha256sum experiments/EXP-0034-dynamic-nmp-reduction.patch | tee /tmp/candidate-patch-sha256.txt
 
       - name: Candidate vs accepted Crab baseline 3+0.03
         run: |
@@ -130,7 +134,7 @@ jobs:
           import json, pathlib
           def read(p):
               q=pathlib.Path(p); return q.read_text().strip() if q.exists() else None
-          manifest={'experiment':'EXP-0034','candidate_branch_sha':read('/tmp/candidate-branch-sha.txt'),'workflow_checkout_sha':read('/tmp/workflow-checkout-sha.txt'),'accepted_crab_baseline_sha':read('/tmp/crab-baseline-sha.txt'),'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),'baseline_binary_sha256':read('/tmp/baseline-binary-sha256.txt'),'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c','sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),'official_bench_nodes':2050811,'candidate_bench':read('/tmp/candidate-bench.txt'),'baseline_bench':read('/tmp/baseline-bench.txt'),'threads':1,'hash_mb':64,'normal_time_control':'3+0.03','equal_budget_time_control':'500ms/move','normal_games_per_match':512,'equal_budget_games_per_match':1024,'concurrency':2,'opening_order':'sequential, 8 plies, repeated colors','adjudication':'none','match_runner':'Cute Chess v1.3.1','match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),'compiler':read('/tmp/compiler.txt'),'host':read('/tmp/host.txt'),'network_checksums':read('/tmp/network-sha256.txt'),'opening_checksum':read('/tmp/openings-sha256.txt')}
+          manifest={'experiment':'EXP-0034','candidate_branch_sha':read('/tmp/candidate-branch-sha.txt'),'workflow_checkout_sha':read('/tmp/workflow-checkout-sha.txt'),'accepted_crab_baseline_sha':read('/tmp/crab-baseline-sha.txt'),'candidate_patch_sha256':read('/tmp/candidate-patch-sha256.txt'),'candidate_engine_diff_sha256':read('/tmp/candidate-engine-diff-sha256.txt'),'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),'baseline_binary_sha256':read('/tmp/baseline-binary-sha256.txt'),'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c','sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),'official_bench_nodes':2050811,'candidate_bench':read('/tmp/candidate-bench.txt'),'baseline_bench':read('/tmp/baseline-bench.txt'),'threads':1,'hash_mb':64,'normal_time_control':'3+0.03','equal_budget_time_control':'500ms/move','normal_games_per_match':512,'equal_budget_games_per_match':1024,'concurrency':2,'opening_order':'sequential, 8 plies, repeated colors','adjudication':'none','match_runner':'Cute Chess v1.3.1','match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),'compiler':read('/tmp/compiler.txt'),'host':read('/tmp/host.txt'),'network_checksums':read('/tmp/network-sha256.txt'),'opening_checksum':read('/tmp/openings-sha256.txt')}
           pathlib.Path('/tmp/audit.json').write_text(json.dumps(manifest,indent=2)+'\n'); print(json.dumps(manifest,indent=2))
           PY
 
@@ -154,6 +158,8 @@ jobs:
             /tmp/sf18-bench.txt
             /tmp/network-sha256.txt
             /tmp/openings-sha256.txt
+            /tmp/candidate-patch-sha256.txt
+            /tmp/candidate-engine-diff-sha256.txt
             /tmp/cutechess-runner-sha.txt
             /tmp/candidate-binary-sha256.txt
             /tmp/baseline-binary-sha256.txt
