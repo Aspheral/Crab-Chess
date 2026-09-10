@@ -1,4 +1,62 @@
-{
-  "content": "diff --git a/src/search.cpp b/src/search.cpp\n--- a/src/search.cpp\n+++ b/src/search.cpp\n@@ -805,3 +805,10 @@ Value Search::Worker::search(\n             else\n                 return ttData.value;\n         }\n+    }  // No cutoff, but why? Does the stored inexact value mismatch our aspiration window?\n+    else if (!PvNode && !excludedMove && ttData.depth > depth - (ttData.value <= beta)\n+             && is_valid(ttData.value) && ttData.bound != BOUND_EXACT\n+             && ttData.bound & (ttData.value >= beta ? BOUND_UPPER : BOUND_LOWER) && depth > 5)\n+    {  // If a window-bound mismatch is the only reason cutoff failed, penalize the now-useless tte\n+        ttWriter.penalize(1);\n     }\n \n     // Step 5. Tablebases probe\n@@ -1238,6 +1238,9 @@ Value Search::Worker::search(\n         // Decrease/increase reduction for moves with a good/bad history\n         r -= ss->statScore * 850 / 8192;\n \n+        if (!capture && !is_decisive(alpha))\n+            r += 3 * std::clamp(alpha - eval, -64, 96);\n+\n         // Scale up reductions for expected ALL nodes\n         if (allNode)\n             r += r / (depth + 1);\n\ndiff --git a/src/tt.cpp b/src/tt.cpp\n--- a/src/tt.cpp\n+++ b/src/tt.cpp\n@@ -63,6 +63,7 @@ struct TTEntry {\n \n    private:\n     friend class TranspositionTable;\n+    friend struct TTWriter;\n \n     uint16_t key16;\n     uint8_t  depth8;\n@@ -128,5 +129,10 @@ void TTWriter::write(\n     Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, uint8_t generation8) {\n     entry->save(k, v, pv, b, d, m, ev, generation8);\n }\n \n+void TTWriter::penalize(int penalty) {\n+    assert(entry->depth8 + DEPTH_ENTRY_OFFSET > penalty);\n+    entry->depth8 -= penalty;\n+}\n+\n \n // A TranspositionTable is an array of Cluster, of size clusterCount. Each cluster consists of ClusterSize number\n\ndiff --git a/src/tt.h b/src/tt.h\n--- a/src/tt.h\n+++ b/src/tt.h\n@@ -68,6 +68,7 @@ struct TTWriter {\n    public:\n     void write(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, uint8_t generation8);\n+    void penalize(int penalty);  // decrement stored depth by the penalty\n \n    private:\n     friend class TranspositionTable;\n     TTEntry* entry;\n",
-  "encoding": "utf-8"
-}
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -805,6 +805,13 @@ Value Search::Worker::search(
+             else
+                 return ttData.value;
+         }
+     }  // No cutoff, but why? Does the stored inexact value mismatch our aspiration window?
+     else if (!PvNode && !excludedMove && ttData.depth > depth - (ttData.value <= beta)
+              && is_valid(ttData.value) && ttData.bound != BOUND_EXACT
+              && ttData.bound & (ttData.value >= beta ? BOUND_UPPER : BOUND_LOWER) && depth > 5)
+     {  // If a window-bound mismatch is the only reason cutoff failed, penalize the now-useless tte
+         ttWriter.penalize(1);
+     }
+ 
+     // Step 5. Tablebases probe
+@@ -1238,8 +1238,11 @@ Value Search::Worker::search(
+         // Decrease/increase reduction for moves with a good/bad history
+         r -= ss->statScore * 850 / 8192;
+ 
++        if (!capture && !is_decisive(alpha))
++            r += 3 * std::clamp(alpha - eval, -64, 96);
++
+         // Scale up reductions for expected ALL nodes
+         if (allNode)
+             r += r / (depth + 1);
+
+diff --git a/src/tt.cpp b/src/tt.cpp
+--- a/src/tt.cpp
++++ b/src/tt.cpp
+@@ -63,6 +63,7 @@ struct TTEntry {
+ 
+    private:
+     friend class TranspositionTable;
++    friend struct TTWriter;
+ 
+     uint16_t key16;
+     uint8_t  depth8;
+@@ -128,5 +128,10 @@ void TTWriter::write(
+     Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, uint8_t generation8) {
+     entry->save(k, v, pv, b, d, m, ev, generation8);
+ }
+ 
++void TTWriter::penalize(int penalty) {
++    assert(entry->depth8 + DEPTH_ENTRY_OFFSET > penalty);
++    entry->depth8 -= penalty;
++}
++
+ 
+ // A TranspositionTable is an array of Cluster, of size clusterCount. Each cluster consists of ClusterSize number
+
+diff --git a/src/tt.h b/src/tt.h
+--- a/src/tt.h
++++ b/src/tt.h
+@@ -68,6 +68,7 @@ struct TTWriter {
+    public:
+     void write(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, uint8_t generation8);
++    void penalize(int penalty);  // decrement stored depth by the penalty
+ 
+    private:
+     friend class TranspositionTable;
+     TTEntry* entry;
