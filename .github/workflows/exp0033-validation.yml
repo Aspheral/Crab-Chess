@@ -34,14 +34,12 @@ jobs:
           experiments/EXP-0033-nullmove-capturedpiece.apply.sh "$tmpdir"
           python3 - "$tmpdir/engine" <<'PY'
           from pathlib import Path
-          import re
           import sys
           root = Path(sys.argv[1])
-          pattern = re.compile(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE;[ \t]*$", re.MULTILINE)
           hits = []
           for path in sorted(root.rglob("*.cpp")):
               text = path.read_text(encoding="utf-8")
-              count = len(pattern.findall(text))
+              count = text.count("newSt.capturedPiece = NO_PIECE;")
               if count:
                   hits.append((path, count))
           assert len(hits) == 1, hits
