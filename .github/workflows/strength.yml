@@ -60,8 +60,8 @@ jobs:
       - name: Build current Crab candidate
         run: |
           set -euo pipefail
-          git apply --check --directory=engine experiments/EXP-0034-dynamic-nmp-reduction.patch
-          git apply --directory=engine experiments/EXP-0034-dynamic-nmp-reduction.patch
+          git apply --check experiments/EXP-0034-dynamic-nmp-reduction.patch
+          git apply experiments/EXP-0034-dynamic-nmp-reduction.patch
           git diff --binary -- engine | sha256sum | tee /tmp/candidate-engine-diff-sha256.txt
           make clean
           make -j2 build ARCH=x86-64-avx2 COMP=clang
@@ -117,13 +117,13 @@ jobs:
       - name: Candidate vs accepted Crab baseline 500ms per move
         run: |
           set -euo pipefail
-          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-crab-500ms.pgn
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=CrabBaseline proto=uci -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-crab-500ms.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab-500ms.pgn --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab-500ms.json
 
       - name: Candidate vs immutable SF18 500ms per move
         run: |
           set -euo pipefail
-          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-sf18-500ms.pgn
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 option.Threads=1 option.Hash=64 -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-sf18-500ms.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18-500ms.pgn --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18-500ms.json
 
       - name: Write audit manifest
