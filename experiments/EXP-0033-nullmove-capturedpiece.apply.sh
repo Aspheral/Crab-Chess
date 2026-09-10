@@ -35,8 +35,8 @@ if len(anchors) != 1:
     raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(anchors)}")
 
 _, _, insert_at = anchors[0]
-indent = lines[insert_at][:len(lines[insert_at]) - len(lines[insert_at].lstrip(" \\t"))]
-lines.insert(insert_at, indent + "newSt.capturedPiece = NO_PIECE;\\n")
+indent = lines[insert_at][:len(lines[insert_at]) - len(lines[insert_at].lstrip(" \t"))]
+lines.insert(insert_at, indent + "newSt.capturedPiece = NO_PIECE;\n")
 path.write_text("".join(lines), encoding="utf-8")
 print(path)
 PY
