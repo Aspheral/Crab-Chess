@@ -19,7 +19,7 @@ files = sorted((root / "engine").rglob("*.cpp"))
 # alignment, and whitespace differences in the surrounding assignments.
 anchor_re = re.compile(
     r"(?P<prefix>^[ \t]*std::memcpy\s*\(\s*&newSt\s*,\s*st\s*,\s*sizeof\s*\(\s*StateInfo\s*\)\s*\)\s*;[ \t]*(?:\r?\n|\r)+"
-    r"[ \t]*newSt\.previous\s*=\s*st\s*;[ \t]*(?:(?:\r?\n|\r)[ \t]*)+)")
+    r"[ \t]*newSt\.previous\s*=\s*st\s*;[ \t]*(?:(?:\r?\n|\r)[ \t]*)+"
     r"(?P<tail>[ \t]*st\s*=\s*&newSt\s*;[ \t]*$)",
     re.MULTILINE,
 )
