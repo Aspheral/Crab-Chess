@@ -53,6 +53,7 @@ jobs:
 
       - name: Build accepted Crab control
         run: |
+          BASE_SHA="$(cat /tmp/crab-baseline-sha.txt)"
           git worktree add --detach /tmp/crab-baseline "$BASE_SHA"
           make -C /tmp/crab-baseline clean
           make -C /tmp/crab-baseline -j2 build ARCH=x86-64-avx2 COMP=clang
@@ -68,6 +69,7 @@ jobs:
           sha256sum /tmp/crab-candidate | tee /tmp/candidate-binary-sha256.txt
           /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
           grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/candidate-bench.txt
+          BASE_SHA="$(cat /tmp/crab-baseline-sha.txt)"
           git diff --binary "$BASE_SHA" -- engine | sha256sum | tee /tmp/candidate-engine-diff-sha256.txt
 
       - name: Build immutable Stockfish 18 control
