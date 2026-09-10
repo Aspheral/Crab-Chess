@@ -17,7 +17,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     name: Cumulative candidate strength screen
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,11 +29,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ -n "${PR_BASE_SHA:-}" ]; then
-            BASE_SHA="$PR_BASE_SHA"
-          else
-            BASE_SHA="917fa7fff1124343c145838aafcd59aa6c64d356"
-          fi
+          if [ -n "${PR_BASE_SHA:-}" ]; then BASE_SHA="$PR_BASE_SHA"; else BASE_SHA="917fa7fff1124343c145838aafcd59aa6c64d356"; fi
           CANDIDATE_SHA="${PR_HEAD_SHA:-$(git rev-parse HEAD)}"
           printf '%s\n' "$BASE_SHA" | tee /tmp/crab-baseline-sha.txt
           printf '%s\n' "$CANDIDATE_SHA" | tee /tmp/candidate-branch-sha.txt
@@ -102,31 +98,29 @@ jobs:
           find engine/src /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/network-sha256.txt
           sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
 
-      - name: Candidate vs accepted Crab baseline
+      - name: Candidate vs accepted Crab baseline 3+0.03
         run: |
           set -euo pipefail
-          /tmp/cutechess-cli \
-            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
-            -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci \
-            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
-            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 256 -repeat -concurrency 2 \
-            -pgnout /tmp/candidate-vs-crab.pgn
-          python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn \
-            --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-crab.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
 
-      - name: Candidate vs immutable SF18
+      - name: Candidate vs immutable SF18 3+0.03
         run: |
           set -euo pipefail
-          /tmp/cutechess-cli \
-            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
-            -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
-            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
-            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 256 -repeat -concurrency 2 \
-            -pgnout /tmp/candidate-vs-sf18.pgn
-          python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn \
-            --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
+
+      - name: Candidate vs accepted Crab baseline 500ms per move
+        run: |
+          set -euo pipefail
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-crab-500ms.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab-500ms.pgn --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab-500ms.json
+
+      - name: Candidate vs immutable SF18 500ms per move
+        run: |
+          set -euo pipefail
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each st=0.5 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 512 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-sf18-500ms.pgn
+          python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18-500ms.pgn --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18-500ms.json
 
       - name: Write audit manifest
         if: always()
@@ -135,36 +129,9 @@ jobs:
           python3 - <<'PY'
           import json, pathlib
           def read(p):
-              q = pathlib.Path(p)
-              return q.read_text().strip() if q.exists() else None
-          manifest = {
-            'experiment': 'EXP-0034',
-            'candidate_branch_sha': read('/tmp/candidate-branch-sha.txt'),
-            'workflow_checkout_sha': read('/tmp/workflow-checkout-sha.txt'),
-            'accepted_crab_baseline_sha': read('/tmp/crab-baseline-sha.txt'),
-            'candidate_binary_sha256': read('/tmp/candidate-binary-sha256.txt'),
-            'baseline_binary_sha256': read('/tmp/baseline-binary-sha256.txt'),
-            'candidate_bench': read('/tmp/candidate-bench.txt'),
-            'baseline_bench': read('/tmp/baseline-bench.txt'),
-            'immutable_sf18_sha': 'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
-            'sf18_binary_sha256': read('/tmp/sf18-binary-sha256.txt'),
-            'official_bench_nodes': 2050811,
-            'threads': 1,
-            'hash_mb': 64,
-            'time_control': '3+0.03',
-            'concurrency': 2,
-            'games_per_match_planned': 512,
-            'opening_order': 'sequential, 8 plies, repeated colors',
-            'adjudication': 'none',
-            'match_runner': 'Cute Chess v1.3.1',
-            'match_runner_sha': read('/tmp/cutechess-runner-sha.txt'),
-            'compiler': read('/tmp/compiler.txt'),
-            'host': read('/tmp/host.txt'),
-            'network_checksums': read('/tmp/network-sha256.txt'),
-            'opening_checksum': read('/tmp/openings-sha256.txt'),
-          }
-          pathlib.Path('/tmp/audit.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          print(json.dumps(manifest, indent=2))
+              q=pathlib.Path(p); return q.read_text().strip() if q.exists() else None
+          manifest={'experiment':'EXP-0034','candidate_branch_sha':read('/tmp/candidate-branch-sha.txt'),'workflow_checkout_sha':read('/tmp/workflow-checkout-sha.txt'),'accepted_crab_baseline_sha':read('/tmp/crab-baseline-sha.txt'),'candidate_binary_sha256':read('/tmp/candidate-binary-sha256.txt'),'baseline_binary_sha256':read('/tmp/baseline-binary-sha256.txt'),'immutable_sf18_sha':'cb3d4ee9b47d0c5aae855b12379378ea1439675c','sf18_binary_sha256':read('/tmp/sf18-binary-sha256.txt'),'official_bench_nodes':2050811,'candidate_bench':read('/tmp/candidate-bench.txt'),'baseline_bench':read('/tmp/baseline-bench.txt'),'threads':1,'hash_mb':64,'normal_time_control':'3+0.03','equal_budget_time_control':'500ms/move','normal_games_per_match':512,'equal_budget_games_per_match':1024,'concurrency':2,'opening_order':'sequential, 8 plies, repeated colors','adjudication':'none','match_runner':'Cute Chess v1.3.1','match_runner_sha':read('/tmp/cutechess-runner-sha.txt'),'compiler':read('/tmp/compiler.txt'),'host':read('/tmp/host.txt'),'network_checksums':read('/tmp/network-sha256.txt'),'opening_checksum':read('/tmp/openings-sha256.txt')}
+          pathlib.Path('/tmp/audit.json').write_text(json.dumps(manifest,indent=2)+'\n'); print(json.dumps(manifest,indent=2))
           PY
 
       - name: Upload strength evidence
@@ -176,8 +143,12 @@ jobs:
             /tmp/audit.json
             /tmp/candidate-vs-crab.json
             /tmp/candidate-vs-sf18.json
+            /tmp/candidate-vs-crab-500ms.json
+            /tmp/candidate-vs-sf18-500ms.json
             /tmp/candidate-vs-crab.pgn
             /tmp/candidate-vs-sf18.pgn
+            /tmp/candidate-vs-crab-500ms.pgn
+            /tmp/candidate-vs-sf18-500ms.pgn
             /tmp/candidate-bench.txt
             /tmp/baseline-bench.txt
             /tmp/sf18-bench.txt
