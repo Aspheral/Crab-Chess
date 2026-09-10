@@ -6,40 +6,41 @@ set -euo pipefail
 # The repository source remains unchanged until this harness succeeds in CI.
 
 ROOT="${1:?usage: $0 <repo-root>}"
+TARGET="$ROOT/engine/src/position.cpp"
 
-python3 - "$ROOT" <<'PY'
+python3 - "$TARGET" <<'PY'
 from pathlib import Path
 import re
 import sys
 
-root = Path(sys.argv[1])
-files = sorted((root / "engine").rglob("*.cpp"))
+path = Path(sys.argv[1])
+if not path.is_file():
+    raise SystemExit(f"EXP-0033 target missing: {path}")
+text = path.read_text(encoding="utf-8")
 
-capture_re = re.compile(r"^[ \t]*newSt\.capturedPiece\s*=\s*NO_PIECE\s*;[ \t]*$", re.MULTILINE)
-memcpy_re = re.compile(r"std::memcpy\s*\(\s*&newSt\s*,\s*st\s*,\s*sizeof\s*\(\s*StateInfo\s*\)\s*\)\s*;")
-previous_re = re.compile(r"^[ \t]*newSt\.previous\s*=\s*st\s*;[ \t]*$")
-next_re = re.compile(r"^[ \t]*st\s*=\s*&newSt\s*;[ \t]*$")
+if "newSt.capturedPiece = NO_PIECE;" in text:
+    raise SystemExit("EXP-0033 already applied")
 
-matches = []
-for path in files:
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    if any(capture_re.match(line.rstrip("\r\n")) for line in lines):
-        raise SystemExit("EXP-0033 already applied")
-    for i, line in enumerate(lines):
-        if not memcpy_re.search(line):
-            continue
-        prev = next((j for j in range(i + 1, min(i + 12, len(lines))) if previous_re.match(lines[j].rstrip("\r\n"))), None)
-        nxt = next((j for j in range((prev + 1) if prev is not None else i + 1, min(i + 14, len(lines))) if next_re.match(lines[j].rstrip("\r\n"))), None)
-        if prev is not None and nxt is not None and prev < nxt:
-            matches.append((path, lines, nxt))
-            break
+anchor = re.compile(
+    r"(?P<memcpy>std::memcpy\\s*\\(\\s*&newSt\\s*,\\s*st\\s*,\\s*sizeof\\s*\\(\\s*StateInfo\\s*\\)\\s*\\)\\s*;"
+    r"(?P<gap>\\s+)"
+    r"newSt\\.previous\\s*=\\s*st\\s*;"
+    r"(?P<gap2>\\s+)"
+    r"(?P<indent>[ \\t]*)st\\s*=\\s*&newSt\\s*;)",
+    re.MULTILINE,
+)
 
+matches = list(anchor.finditer(text))
 if len(matches) != 1:
     raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(matches)}")
 
-path, lines, insert_at = matches[0]
-indent = re.match(r"^[ \t]*", lines[insert_at]).group(0)
-lines.insert(insert_at, indent + "newSt.capturedPiece = NO_PIECE;\n")
-path.write_text("".join(lines), encoding="utf-8")
+m = matches[0]
+indent = m.group("indent")
+replacement = m.group(0).replace(
+    indent + "st = &newSt;",
+    indent + "newSt.capturedPiece = NO_PIECE;\\n" + indent + "st = &newSt;",
+    1,
+)
+path.write_text(text[:m.start()] + replacement + text[m.end():], encoding="utf-8")
 print(path)
 PY
