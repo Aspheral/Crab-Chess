@@ -10,37 +10,33 @@ TARGET="$ROOT/engine/src/position.cpp"
 
 python3 - "$TARGET" <<'PY'
 from pathlib import Path
-import re
 import sys
 
 path = Path(sys.argv[1])
 if not path.is_file():
     raise SystemExit(f"EXP-0033 target missing: {path}")
-text = path.read_text(encoding="utf-8")
+lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
 
-if "newSt.capturedPiece = NO_PIECE;" in text:
+if any("newSt.capturedPiece = NO_PIECE;" in line for line in lines):
     raise SystemExit("EXP-0033 already applied")
 
-anchor = re.compile(
-    r"(?P<memcpy>std::memcpy\\s*\\(\\s*&newSt\\s*,\\s*st\\s*,\\s*sizeof\\s*\\(\\s*StateInfo\\s*\\)\\s*\\)\\s*;"
-    r"(?P<gap>\\s+)"
-    r"newSt\\.previous\\s*=\\s*st\\s*;"
-    r"(?P<gap2>\\s+)"
-    r"(?P<indent>[ \\t]*)st\\s*=\\s*&newSt\\s*;)",
-    re.MULTILINE,
-)
+memcpy = [i for i, line in enumerate(lines) if "std::memcpy(&newSt, st, sizeof(StateInfo));" in line]
+previous = [i for i, line in enumerate(lines) if line.strip() == "newSt.previous = st;"]
+next_state = [i for i, line in enumerate(lines) if line.strip().replace(" ", "") == "st=&newSt;"]
 
-matches = list(anchor.finditer(text))
-if len(matches) != 1:
-    raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(matches)}")
+anchors = []
+for i in memcpy:
+    prev = [j for j in previous if i < j < i + 12]
+    nxt = [j for j in next_state if prev and prev[0] < j < i + 14]
+    if len(prev) == 1 and len(nxt) == 1:
+        anchors.append((i, prev[0], nxt[0]))
 
-m = matches[0]
-indent = m.group("indent")
-replacement = m.group(0).replace(
-    indent + "st = &newSt;",
-    indent + "newSt.capturedPiece = NO_PIECE;\\n" + indent + "st = &newSt;",
-    1,
-)
-path.write_text(text[:m.start()] + replacement + text[m.end():], encoding="utf-8")
+if len(anchors) != 1:
+    raise SystemExit(f"EXP-0033 null-move anchor count mismatch: {len(anchors)}")
+
+_, _, insert_at = anchors[0]
+indent = lines[insert_at][:len(lines[insert_at]) - len(lines[insert_at].lstrip(" \\t"))]
+lines.insert(insert_at, indent + "newSt.capturedPiece = NO_PIECE;\\n")
+path.write_text("".join(lines), encoding="utf-8")
 print(path)
 PY
