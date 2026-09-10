@@ -1,0 +1,195 @@
+name: STACK-0002 EXP0021 EXP0023 EXP0025
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/STACK-0002-exp0021-exp0023-exp0025.patch'
+      - '.github/workflows/stack0002-exp0021-exp0023-exp0025.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-strength:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'stack/0002-exp0021-exp0023-exp0025' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      ACCEPTED_CRAB_SHA: 917fa7fff1124343c145838aafcd59aa6c64d356
+      ACCEPTED_CRAB_BENCH: '2146293'
+      SF18_SHA: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+      SF18_BENCH: '2050811'
+      PATCH: experiments/STACK-0002-exp0021-exp0023-exp0025.patch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record provenance
+        run: |
+          set -euxo pipefail
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          printf '%s\n' "$ACCEPTED_CRAB_SHA" | tee /tmp/accepted-crab-sha.txt
+          printf '%s\n' "$SF18_SHA" | tee /tmp/sf18-sha.txt
+          sha256sum "$PATCH" | tee /tmp/patch-sha256.txt
+          gcc --version | head -1 | tee /tmp/gcc.txt
+          clang++ --version | head -1 | tee /tmp/clang.txt
+          lscpu | tee /tmp/cpu.txt
+
+      - name: Verify and apply candidate
+        run: |
+          set -euxo pipefail
+          test "$(git merge-base HEAD "$ACCEPTED_CRAB_SHA")" = "$ACCEPTED_CRAB_SHA"
+          git apply --check --directory=engine "$PATCH"
+          git apply --directory=engine "$PATCH"
+          git diff --check
+          test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h '
+          git diff --binary -- engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h | sha256sum | tee /tmp/engine-diff-sha256.txt
+          git add engine/src/search.cpp engine/src/tt.cpp engine/src/tt.h
+          git write-tree | tee /tmp/post-patch-tree.txt
+
+      - name: Build GCC and deterministic bench
+        run: |
+          set -euxo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp engine/src/crab /tmp/crab-gcc
+          printf 'uci\nisready\nquit\n' | /tmp/crab-gcc | tee /tmp/candidate-gcc-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/candidate-gcc-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/candidate-gcc-uci.txt
+          /tmp/crab-gcc bench 2>&1 | tee /tmp/candidate-gcc-bench.txt
+          grep 'Nodes searched' /tmp/candidate-gcc-bench.txt | tail -1 | grep -Eo '[0-9]+' | tail -1 | tee /tmp/candidate-bench.txt
+          sha256sum /tmp/crab-gcc | tee /tmp/candidate-gcc-binary-sha256.txt
+
+      - name: Build Clang and reproduce bench
+        run: |
+          set -euxo pipefail
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-candidate
+          printf 'uci\nisready\nquit\n' | /tmp/crab-candidate | tee /tmp/candidate-clang-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/candidate-clang-uci.txt
+          grep -q '^id author Crab Chess contributors' /tmp/candidate-clang-uci.txt
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-clang-bench-1.txt
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-clang-bench-2.txt
+          for f in /tmp/candidate-clang-bench-1.txt /tmp/candidate-clang-bench-2.txt; do grep 'Nodes searched' "$f" | tail -1 | grep -Eo '[0-9]+' | tail -1; done | tee /tmp/candidate-clang-nodes.txt
+          test "$(sed -n '1p' /tmp/candidate-clang-nodes.txt)" = "$(cat /tmp/candidate-bench.txt)"
+          test "$(sed -n '2p' /tmp/candidate-clang-nodes.txt)" = "$(cat /tmp/candidate-bench.txt)"
+          sha256sum /tmp/crab-candidate | tee /tmp/candidate-clang-binary-sha256.txt
+
+      - name: ASan UBSan smoke
+        run: |
+          set -euxo pipefail
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 sh -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab"
+
+      - name: Build accepted Crab control
+        run: |
+          set -euxo pipefail
+          git worktree add --detach /tmp/crab-base "$ACCEPTED_CRAB_SHA"
+          make -C /tmp/crab-base -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/crab-base/engine/src/crab /tmp/crab-accepted
+          printf 'uci\nisready\nquit\n' | /tmp/crab-accepted | tee /tmp/accepted-uci.txt
+          grep -q '^id name Crab Chess ' /tmp/accepted-uci.txt
+          /tmp/crab-accepted bench 2>&1 | tee /tmp/accepted-bench.txt
+          grep -Eq "Nodes searched[[:space:]]*:[[:space:]]*$ACCEPTED_CRAB_BENCH" /tmp/accepted-bench.txt
+          sha256sum /tmp/crab-accepted | tee /tmp/accepted-binary-sha256.txt
+
+      - name: Build immutable Stockfish 18 control
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach "$SF18_SHA"
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = "$SF18_SHA"
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq "Nodes searched[[:space:]]*:[[:space:]]*$SF18_BENCH" /tmp/sf18-bench.txt
+          sha256sum /tmp/sf18 | tee /tmp/sf18-binary-sha256.txt
+
+      - name: Verify NNUE and openings
+        run: |
+          set -euxo pipefail
+          find engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/candidate-networks.txt
+          find /tmp/crab-base/engine/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/accepted-networks.txt
+          find /tmp/stockfish/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 sha256sum | tee /tmp/sf18-networks.txt
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+
+      - name: Build pinned Cute Chess
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          cp /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-sha.txt
+
+      - name: STACK-0002 vs accepted Crab
+        run: |
+          set -euxo pipefail
+          /tmp/cutechess-cli -engine name=CrabStack cmd=/tmp/crab-candidate proto=uci -engine name=CrabAccepted cmd=/tmp/crab-accepted proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/stack-vs-crab.pgn
+          python3 tools/strength/summarize_match.py /tmp/stack-vs-crab.pgn --engine CrabStack --opponent CrabAccepted --json /tmp/stack-vs-crab.json
+          cat /tmp/stack-vs-crab.json
+
+      - name: STACK-0002 vs immutable SF18
+        run: |
+          set -euxo pipefail
+          /tmp/cutechess-cli -engine name=CrabStack cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/stack-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/stack-vs-sf18.pgn --engine CrabStack --opponent Stockfish18 --json /tmp/stack-vs-sf18.json
+          cat /tmp/stack-vs-sf18.json
+
+      - name: Write audit manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          def r(p):
+              q=pathlib.Path(p)
+              return q.read_text().strip() if q.exists() else None
+          m={
+            'experiment':'STACK-0002',
+            'components':['EXP-0021','EXP-0023','EXP-0025'],
+            'note':'EXP-0023 is already present in accepted main; candidate patch applies only the new EXP-0021 and EXP-0025 deltas to avoid double application.',
+            'wrapper_sha':r('/tmp/wrapper-sha.txt'),
+            'accepted_crab_sha':r('/tmp/accepted-crab-sha.txt'),
+            'immutable_sf18_sha':r('/tmp/sf18-sha.txt'),
+            'patch_sha256':r('/tmp/patch-sha256.txt'),
+            'engine_diff_sha256':r('/tmp/engine-diff-sha256.txt'),
+            'post_patch_tree':r('/tmp/post-patch-tree.txt'),
+            'candidate_bench':r('/tmp/candidate-bench.txt'),
+            'accepted_crab_bench':2146293,
+            'official_sf18_bench':2050811,
+            'threads':1,'hash_mb':64,'time_control':'3+0.03','concurrency':2,
+            'games_per_leg':512,'opening_policy':'sequential 8 plies, repeated colors','adjudication':'none',
+            'opening_sha256':r('/tmp/openings-sha256.txt'),
+            'cutechess_sha':r('/tmp/cutechess-sha.txt'),
+            'candidate_networks':r('/tmp/candidate-networks.txt'),
+            'accepted_networks':r('/tmp/accepted-networks.txt'),
+            'sf18_networks':r('/tmp/sf18-networks.txt')}
+          pathlib.Path('/tmp/audit.json').write_text(json.dumps(m,indent=2)+'\n')
+          print(json.dumps(m,indent=2))
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack0002-exp0021-exp0023-exp0025-evidence
+          path: |
+            /tmp/audit.json
+            /tmp/stack-vs-crab.json
+            /tmp/stack-vs-sf18.json
+            /tmp/stack-vs-crab.pgn
+            /tmp/stack-vs-sf18.pgn
+            /tmp/candidate-gcc-bench.txt
+            /tmp/candidate-clang-bench-1.txt
+            /tmp/candidate-clang-bench-2.txt
+            /tmp/accepted-bench.txt
+            /tmp/sf18-bench.txt
+            /tmp/*sha256.txt
+            /tmp/post-patch-tree.txt
+            /tmp/cutechess-sha.txt
