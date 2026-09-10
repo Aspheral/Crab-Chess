@@ -1,6 +1,12 @@
 name: STACK-0002 EXP0021 EXP0023 EXP0025
 
 on:
+  push:
+    branches:
+      - 'stack/0002-exp0021-exp0023-exp0025'
+    paths:
+      - 'experiments/STACK-0002-exp0021-exp0023-exp0025.patch'
+      - '.github/workflows/stack0002-exp0021-exp0023-exp0025.yml'
   pull_request:
     paths:
       - 'experiments/STACK-0002-exp0021-exp0023-exp0025.patch'
@@ -12,7 +18,7 @@ permissions:
 
 jobs:
   validate-and-strength:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'stack/0002-exp0021-exp0023-exp0025' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'stack/0002-exp0021-exp0023-exp0025' || github.ref == 'refs/heads/stack/0002-exp0021-exp0023-exp0025' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
