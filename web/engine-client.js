@@ -6,11 +6,12 @@ const subStatus = document.querySelector('#sub-status');
 const info = document.querySelector('.engine-grid');
 let busy = false;
 let lastHistory = '';
+let humanColor = 'w';
 
 function historyFromDom() {
   return [...moveList.querySelectorAll('.move-row')].flatMap(row => {
     const cells = row.querySelectorAll('span');
-    return [cells[1]?.textContent, cells[2]?.textContent].filter(Boolean).filter(Boolean);
+    return [cells[1]?.textContent, cells[2]?.textContent].filter(Boolean);
   });
 }
 
@@ -25,20 +26,34 @@ function setInfo(result) {
   values[3].textContent = 'native';
 }
 
+function updateSideControls() {
+  document.querySelector('#play-white')?.classList.toggle('active', humanColor === 'w');
+  document.querySelector('#play-black')?.classList.toggle('active', humanColor === 'b');
+}
+
+function setHumanColor(color) {
+  humanColor = color;
+  updateSideControls();
+  const game = new Chess();
+  for (const san of historyFromDom()) game.move(san);
+  subStatus.textContent = `You are playing ${humanColor === 'w' ? 'White' : 'Black'}.`;
+  if (game.turn() !== humanColor && !game.isGameOver()) setTimeout(askCrab, 30);
+}
+
 async function askCrab() {
   if (busy) return;
   const chess = new Chess();
   for (const san of historyFromDom()) chess.move(san);
-  if (chess.isGameOver() || chess.turn() !== 'b') return;
+  if (chess.isGameOver() || chess.turn() === humanColor) return;
 
   busy = true;
   status.textContent = 'Crab thinking';
-  subStatus.textContent = 'The accepted native Crab binary is searching this position.';
+  subStatus.textContent = `Crab is playing ${chess.turn() === 'w' ? 'White' : 'Black'} and searching for the best move.`;
   try {
     const response = await fetch('/api/engine', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ fen: chess.fen(), depth: 14 })
+      body: JSON.stringify({ fen: chess.fen(), movetime: 5000 })
     });
     const result = await response.json();
     if (!response.ok || !result.bestmove) throw new Error(result.error || 'No best move returned');
@@ -62,6 +77,10 @@ async function askCrab() {
     busy = false;
   }
 }
+
+document.querySelector('#play-white')?.addEventListener('click', () => setHumanColor('w'));
+document.querySelector('#play-black')?.addEventListener('click', () => setHumanColor('b'));
+updateSideControls();
 
 const observer = new MutationObserver(() => {
   const current = moveList.textContent;
