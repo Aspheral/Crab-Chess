@@ -27,7 +27,12 @@ function parseInfo(line, state) {
   if (score) state.score = { type: score[1], value: Number(score[2]) };
 }
 
-async function runEngine(fen, movetime) {
+function normalizeMoves(moves) {
+  if (!Array.isArray(moves)) return [];
+  return moves.filter(move => typeof move === 'string' && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move));
+}
+
+async function runEngine(fen, moves, movetime) {
   await access(ENGINE);
   const state = {};
   return await new Promise((resolve, reject) => {
@@ -68,7 +73,8 @@ async function runEngine(fen, movetime) {
 
     child.stdin.write('uci\n');
     child.stdin.write('isready\n');
-    child.stdin.write(`position fen ${fen}\n`);
+    if (moves.length) child.stdin.write(`position startpos moves ${moves.join(' ')}\n`);
+    else child.stdin.write(`position fen ${fen}\n`);
     child.stdin.write(`go movetime ${movetime}\n`);
   });
 }
@@ -77,7 +83,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       await access(ENGINE);
-      return send(res, 200, { ok: true, engine: 'Crab', enginePath: 'api/crab' });
+      return send(res, 200, { ok: true, engine: 'Crab', enginePath: 'api/crab', repetitionAware: true });
     } catch {
       return send(res, 503, { ok: false, error: 'Crab binary is not installed in this deployment' });
     }
@@ -87,11 +93,12 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {});
     const fen = String(body.fen ?? '').trim();
+    const moves = normalizeMoves(body.moves);
     const movetime = Math.max(250, Math.min(MAX_MOVETIME_MS, Number(body.movetime ?? 5000) || 5000));
     if (!fen) return send(res, 400, { error: 'fen is required' });
     if (fen.length > 200) return send(res, 400, { error: 'invalid fen' });
-    const result = await runEngine(fen, movetime);
-    return send(res, 200, { ok: true, engine: 'Crab', requestedMovetime: movetime, ...result });
+    const result = await runEngine(fen, moves, movetime);
+    return send(res, 200, { ok: true, engine: 'Crab', requestedMovetime: movetime, historyMoves: moves.length, ...result });
   } catch (error) {
     return send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
   }
