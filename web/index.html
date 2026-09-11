@@ -44,7 +44,7 @@
           <div class="panel-label">GAME</div>
           <h1 id="game-status">White to move</h1>
           <p id="sub-status">Crab will be connected to the native/WASM engine here.</p>
-          <div class="mode-row"><span class="mode-dot"></span><span>Crab engine</span><span class="mode-note">integration ready</span></div>
+          <div class="mode-row"><span class="mode-dot"></span><span>Crab engine</span><span class="mode-note">native bridge</span></div>
         </section>
 
         <section class="panel moves-panel">
@@ -68,15 +68,15 @@
             <div><dt>Depth</dt><dd>—</dd></div>
             <div><dt>Eval</dt><dd>—</dd></div>
             <div><dt>NPS</dt><dd>—</dd></div>
-            <div><dt>Hash</dt><dd>—</dd></div>
+            <div><dt>Hash</dt><dd>native Crab</dd></div>
           </dl>
-          <p>Designed so the current Crab binary can be dropped into the engine adapter without changing the board experience.</p>
+          <p>The deployed API builds and runs the accepted Crab chain directly. No Stockfish substitute is used.</p>
         </section>
       </aside>
     </section>
 
     <footer class="site-footer">
-      <span>Crab Chess</span><span>Built for touch and keyboard</span><span>Crab engine integration pending</span>
+      <span>Crab Chess</span><span>Built for touch and keyboard</span><span>Native Crab bridge</span>
     </footer>
   </main>
 
@@ -92,5 +92,6 @@
     </form>
   </dialog>
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./engine-client.js"></script>
 </body>
 </html>
