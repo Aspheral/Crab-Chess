@@ -1,0 +1,7 @@
+{
+  "buildCommand": "make -C engine/src -j2 build ARCH=x86-64 && cp engine/src/crab api/crab",
+  "outputDirectory": "web",
+  "rewrites": [
+    { "source": "/", "destination": "/web/index.html" }
+  ]
+}
