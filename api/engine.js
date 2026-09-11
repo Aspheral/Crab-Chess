@@ -3,8 +3,8 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 
 const ENGINE = path.join(process.cwd(), 'api', 'crab');
-const MAX_DEPTH = 18;
-const TIMEOUT_MS = 9000;
+const MAX_MOVETIME_MS = 7000;
+const TIMEOUT_MS = 8500;
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -17,15 +17,17 @@ function parseInfo(line, state) {
   const seldepth = line.match(/\bseldepth (\d+)/);
   const nodes = line.match(/\bnodes (\d+)/);
   const nps = line.match(/\bnps (\d+)/);
+  const time = line.match(/\btime (\d+)/);
   const score = line.match(/\bscore (cp|mate) (-?\d+)/);
   if (depth) state.depth = Number(depth[1]);
   if (seldepth) state.seldepth = Number(seldepth[1]);
   if (nodes) state.nodes = Number(nodes[1]);
   if (nps) state.nps = Number(nps[1]);
+  if (time) state.time = Number(time[1]);
   if (score) state.score = { type: score[1], value: Number(score[2]) };
 }
 
-async function runEngine(fen, depth) {
+async function runEngine(fen, movetime) {
   await access(ENGINE);
   const state = {};
   return await new Promise((resolve, reject) => {
@@ -67,7 +69,7 @@ async function runEngine(fen, depth) {
     child.stdin.write('uci\n');
     child.stdin.write('isready\n');
     child.stdin.write(`position fen ${fen}\n`);
-    child.stdin.write(`go depth ${depth}\n`);
+    child.stdin.write(`go movetime ${movetime}\n`);
   });
 }
 
@@ -85,11 +87,11 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {});
     const fen = String(body.fen ?? '').trim();
-    const depth = Math.max(1, Math.min(MAX_DEPTH, Number(body.depth ?? 14) || 14));
+    const movetime = Math.max(250, Math.min(MAX_MOVETIME_MS, Number(body.movetime ?? 5000) || 5000));
     if (!fen) return send(res, 400, { error: 'fen is required' });
     if (fen.length > 200) return send(res, 400, { error: 'invalid fen' });
-    const result = await runEngine(fen, depth);
-    return send(res, 200, { ok: true, engine: 'Crab', depth, ...result });
+    const result = await runEngine(fen, movetime);
+    return send(res, 200, { ok: true, engine: 'Crab', requestedMovetime: movetime, ...result });
   } catch (error) {
     return send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
   }
