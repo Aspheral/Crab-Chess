@@ -43,7 +43,7 @@
         <section class="panel status-panel">
           <div class="panel-label">GAME</div>
           <h1 id="game-status">White to move</h1>
-          <p id="sub-status">Crab will be connected to the native/WASM engine here.</p>
+          <p id="sub-status">Choose your side to start playing against Crab.</p>
           <div class="mode-row"><span class="mode-dot"></span><span>Crab engine</span><span class="mode-note">native bridge</span></div>
         </section>
 
@@ -53,7 +53,12 @@
         </section>
 
         <section class="panel controls-panel">
-          <div class="panel-label">CONTROLS</div>
+          <div class="panel-label">PLAY AS</div>
+          <div class="controls-grid side-controls">
+            <button id="play-white" class="active" type="button">White</button>
+            <button id="play-black" type="button">Black</button>
+          </div>
+          <div class="panel-label controls-label">CONTROLS</div>
           <div class="controls-grid">
             <button id="new-game" type="button">New game</button>
             <button id="undo" type="button">Undo</button>
