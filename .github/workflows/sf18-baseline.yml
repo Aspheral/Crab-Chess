@@ -1,0 +1,80 @@
+name: SF18 immutable baseline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SF18_REPO: official-stockfish/Stockfish
+  SF18_SHA: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+  SF18_BENCH: "2050811"
+
+jobs:
+  verify-sf18:
+    name: Verify official SF18 baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Crab Chess
+        uses: actions/checkout@v4
+        with:
+          path: crab
+
+      - name: Checkout immutable Stockfish 18
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SF18_REPO }}
+          ref: ${{ env.SF18_SHA }}
+          path: sf18
+          fetch-depth: 1
+
+      - name: Verify upstream commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C sf18 rev-parse HEAD)"
+          test "$actual" = "$SF18_SHA"
+          printf 'SF18_SHA=%s\n' "$actual" | tee sf18-baseline.txt
+
+      - name: Build untouched SF18
+        run: make -C sf18/src -j2 build ARCH=x86-64-modern
+
+      - name: Record toolchain, CPU and NNUE checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "COMPILER=$(g++ --version | head -n1)"
+            echo "CPU=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -n1)"
+            echo "THREADS=1"
+            echo "HASH_MB=16"
+            echo "NETWORK_SHA256_BEGIN"
+            find sf18/src -maxdepth 1 -type f -name 'nn-*.nnue' -print0 | sort -z | xargs -0 -r sha256sum
+            echo "NETWORK_SHA256_END"
+          } | tee -a sf18-baseline.txt
+
+      - name: Deterministic official bench gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          sf18/src/stockfish bench 2>&1 | tee sf18-bench.txt
+          nodes="$(sed -n 's/^Nodes searched  : //p' sf18-bench.txt | tail -n1 | tr -d '[:space:]')"
+          test -n "$nodes"
+          echo "BENCH_NODES=$nodes" | tee -a sf18-baseline.txt
+          if [ "$nodes" != "$SF18_BENCH" ]; then
+            echo "Expected official SF18 bench $SF18_BENCH, got $nodes" >&2
+            exit 1
+          fi
+
+      - name: Upload immutable-baseline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf18-baseline-evidence
+          path: |
+            sf18-baseline.txt
+            sf18-bench.txt
+          if-no-files-found: error
