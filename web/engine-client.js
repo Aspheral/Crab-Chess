@@ -4,9 +4,19 @@ const moveList = document.querySelector('#move-list');
 const status = document.querySelector('#engine-status');
 const subStatus = document.querySelector('#sub-status');
 const info = document.querySelector('.engine-grid');
+const searchTime = document.querySelector('#search-time');
+const searchTimeValue = document.querySelector('#search-time-value');
 let busy = false;
 let lastHistory = '';
 let humanColor = 'w';
+
+function selectedMovetime() {
+  return Math.round(Number(searchTime?.value ?? 5) * 1000);
+}
+
+function updateSearchTimeLabel() {
+  if (searchTimeValue && searchTime) searchTimeValue.value = `${Number(searchTime.value).toFixed(2)} s`;
+}
 
 function historyFromDom() {
   return [...moveList.querySelectorAll('.move-row')].flatMap(row => {
@@ -48,12 +58,13 @@ async function askCrab() {
 
   busy = true;
   status.textContent = 'Crab thinking';
-  subStatus.textContent = `Crab is playing ${chess.turn() === 'w' ? 'White' : 'Black'} and searching for the best move.`;
+  const seconds = (selectedMovetime() / 1000).toFixed(2);
+  subStatus.textContent = `Crab is playing ${chess.turn() === 'w' ? 'White' : 'Black'} with ${seconds}s per move.`;
   try {
     const response = await fetch('/api/engine', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ fen: chess.fen(), movetime: 5000 })
+      body: JSON.stringify({ fen: chess.fen(), movetime: selectedMovetime() })
     });
     const result = await response.json();
     if (!response.ok || !result.bestmove) throw new Error(result.error || 'No best move returned');
@@ -80,7 +91,9 @@ async function askCrab() {
 
 document.querySelector('#play-white')?.addEventListener('click', () => setHumanColor('w'));
 document.querySelector('#play-black')?.addEventListener('click', () => setHumanColor('b'));
+searchTime?.addEventListener('input', updateSearchTimeLabel);
 updateSideControls();
+updateSearchTimeLabel();
 
 const observer = new MutationObserver(() => {
   const current = moveList.textContent;
