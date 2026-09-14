@@ -1,9 +1,6 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -1212,3 +1212,3 @@
- 
-         r += 714;  // Base reduction offset to compensate for other tweaks
+@@ -1215 +1215 @@
 -        r -= moveCount * 73;
 +        r -= moveCount * 65;
-         r -= std::abs(correctionValue) / 30370;
