@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   strength:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'exp/0035-lmr-movecount-65' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'exp/0035-lmr-movecount-65' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
@@ -58,7 +58,7 @@ jobs:
           make -j2 build ARCH=x86-64-avx2 COMP=clang
           cp engine/src/crab /tmp/crab-candidate
           sha256sum /tmp/crab-candidate | tee /tmp/candidate-binary-sha256.txt
-          /tmp/crab-candidate uci <<< $'uci\nquit' | tee /tmp/candidate-uci.txt
+          /tmp/crab-candidate uci <<< $'uci\nquit\n' | tee /tmp/candidate-uci.txt
           grep -q 'id name Crab Chess' /tmp/candidate-uci.txt
           /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
 
@@ -66,7 +66,7 @@ jobs:
         run: |
           make clean
           make -j2 build ARCH=x86-64-sanitize COMP=clang
-          timeout 30s bash -c "printf 'uci\\nposition startpos\\ngo depth 8\\nquit\\n' | ./engine/src/crab" > /tmp/sanitizer-smoke.txt
+          timeout 30s bash -c "printf 'uci\nposition startpos\ngo depth 8\nquit\n' | ./engine/src/crab" > /tmp/sanitizer-smoke.txt
 
       - name: Build immutable Stockfish 18 control
         run: |
@@ -86,24 +86,12 @@ jobs:
 
       - name: Candidate vs accepted Crab
         run: |
-          /tmp/cutechess-cli \
-            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
-            -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci \
-            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
-            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 256 -repeat -concurrency 2 \
-            -pgnout /tmp/candidate-vs-crab.pgn
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=CrabBaseline cmd=/tmp/crab-baseline proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-crab.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-crab.pgn --engine CrabCandidate --opponent CrabBaseline --json /tmp/candidate-vs-crab.json
 
       - name: Candidate vs immutable SF18
         run: |
-          /tmp/cutechess-cli \
-            -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci \
-            -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci \
-            -each tc=3+0.03 option.Threads=1 option.Hash=64 \
-            -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 \
-            -games 2 -rounds 256 -repeat -concurrency 2 \
-            -pgnout /tmp/candidate-vs-sf18.pgn
+          /tmp/cutechess-cli -engine name=CrabCandidate cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/candidate-vs-sf18.pgn
           python3 tools/strength/summarize_match.py /tmp/candidate-vs-sf18.pgn --engine CrabCandidate --opponent Stockfish18 --json /tmp/candidate-vs-sf18.json
 
       - name: Upload auditable evidence
