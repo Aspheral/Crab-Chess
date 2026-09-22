@@ -1,0 +1,7 @@
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -1072,7 +1072,7 @@
+-                Value futilityValue = ss->staticEval + 42 + 161 * !bestMove + 127 * lmrDepth
++                Value futilityValue = ss->staticEval + 42 + 161 * !bestMove + 130 * lmrDepth
+                                     + 85 * (ss->staticEval > alpha);
