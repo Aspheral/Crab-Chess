@@ -47,8 +47,8 @@ jobs:
           /tmp/crab-baseline bench 2>&1 | tee /tmp/baseline-bench.txt
       - name: Build EXP-0039 candidate
         run: |
-          git apply --check --directory=engine experiments/EXP-0039-child-futility-mult-74.patch
-          git apply --directory=engine experiments/EXP-0039-child-futility-mult-74.patch
+          git apply --check experiments/EXP-0039-child-futility-mult-74.patch
+          git apply experiments/EXP-0039-child-futility-mult-74.patch
           git diff --binary -- engine | sha256sum | tee /tmp/candidate-engine-diff-sha256.txt
           make clean
           make -j2 build ARCH=x86-64-avx2 COMP=clang
