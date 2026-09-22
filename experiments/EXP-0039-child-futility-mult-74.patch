@@ -1,7 +1,7 @@
 diff --git a/engine/src/search.cpp b/engine/src/search.cpp
 --- a/engine/src/search.cpp
 +++ b/engine/src/search.cpp
-@@ -887,9 +887,9 @@
+@@ -887,8 +887,8 @@
      // Step 8. Futility pruning: child node
      // The depth condition is important for mate finding.
      {
