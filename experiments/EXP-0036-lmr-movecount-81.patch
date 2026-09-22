@@ -1,0 +1,16 @@
+diff --git a/src/search.cpp b/src/search.cpp
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -1211,11 +1211,11 @@
+         if (ss->ttPv)
+             r -= 2719 + PvNode * 983 + (ttData.value > alpha) * 922
+                + (ttData.depth >= depth) * (934 + cutNode * 1011);
+ 
+         r += 714;  // Base reduction offset to compensate for other tweaks
+-        r -= moveCount * 73;
++        r -= moveCount * 81;
+         r -= std::abs(correctionValue) / 30370;
+ 
+         // Increase reduction for cut nodes
+         if (cutNode)
+             r += 3372 + 997 * !ttData.move;
