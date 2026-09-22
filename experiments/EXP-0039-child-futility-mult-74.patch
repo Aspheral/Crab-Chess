@@ -1,6 +1,6 @@
 diff --git a/src/search.cpp b/src/search.cpp
 --- a/src/search.cpp
 +++ b/src/search.cpp
-@@ -901,1 +901,1 @@
+@@ -891,1 +891,1 @@
 -            Value futilityMult = 76 - 23 * !ss->ttHit;
 +            Value futilityMult = 74 - 23 * !ss->ttHit;
