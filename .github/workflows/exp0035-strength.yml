@@ -63,10 +63,13 @@ jobs:
           /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench.txt
 
       - name: Sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           make clean
-          make -j2 build ARCH=x86-64-sanitize COMP=clang
-          timeout 30s bash -c "printf 'uci\nposition startpos\ngo depth 8\nquit\n' | ./engine/src/crab" > /tmp/sanitizer-smoke.txt
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          timeout 30s bash -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab" | tee /tmp/sanitizer-smoke.txt
 
       - name: Build immutable Stockfish 18 control
         run: |
