@@ -1,0 +1,101 @@
+name: STACK-0003 Ablation EXP-0021 Replication
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/stack0003-ablate-exp0021-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replicate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'ablate/stack0003-remove-exp0021' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install runner dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
+      - name: Record provenance
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          clang++ --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          git rev-parse origin/main | tee /tmp/accepted-main-sha.txt
+          test "$(cat /tmp/accepted-main-sha.txt)" = 215afc5e736236bdb6c269a1310882780d56dfa4
+          sha256sum experiments/STACK-0003-full.patch experiments/STACK-0003-minus-exp0021.patch tools/strength/openings.pgn | tee /tmp/input-sha256.txt
+      - name: Build exact full stack
+        run: |
+          git apply --check experiments/STACK-0003-full.patch
+          git apply experiments/STACK-0003-full.patch
+          git diff --check
+          test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp '
+          git diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/full-engine-diff-sha256.txt
+          git add engine/src/search.cpp
+          git write-tree | tee /tmp/full-post-patch-tree.txt
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-full-stack
+          printf 'uci\nisready\nquit\n' | /tmp/crab-full-stack | tee /tmp/full-uci.txt
+          grep -q 'id name Crab Chess' /tmp/full-uci.txt
+          sha256sum /tmp/crab-full-stack | tee /tmp/full-binary-sha256.txt
+          /tmp/crab-full-stack bench 2>&1 | tee /tmp/full-bench-1.txt
+          /tmp/crab-full-stack bench 2>&1 | tee /tmp/full-bench-2.txt
+          test "$(grep 'Nodes searched' /tmp/full-bench-1.txt | tail -1 | grep -Eo '[0-9]+' | tail -1)" = "$(grep 'Nodes searched' /tmp/full-bench-2.txt | tail -1 | grep -Eo '[0-9]+' | tail -1)"
+      - name: Build stack minus EXP-0021
+        run: |
+          git reset --hard HEAD
+          git apply --check experiments/STACK-0003-minus-exp0021.patch
+          git apply experiments/STACK-0003-minus-exp0021.patch
+          git diff --check
+          test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp '
+          git diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/ablated-engine-diff-sha256.txt
+          git add engine/src/search.cpp
+          git write-tree | tee /tmp/ablated-post-patch-tree.txt
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-minus-exp0021
+          printf 'uci\nisready\nquit\n' | /tmp/crab-minus-exp0021 | tee /tmp/ablated-uci.txt
+          grep -q 'id name Crab Chess' /tmp/ablated-uci.txt
+          sha256sum /tmp/crab-minus-exp0021 | tee /tmp/ablated-binary-sha256.txt
+          /tmp/crab-minus-exp0021 bench 2>&1 | tee /tmp/ablated-bench-1.txt
+          /tmp/crab-minus-exp0021 bench 2>&1 | tee /tmp/ablated-bench-2.txt
+          test "$(grep 'Nodes searched' /tmp/ablated-bench-1.txt | tail -1 | grep -Eo '[0-9]+' | tail -1)" = "$(grep 'Nodes searched' /tmp/ablated-bench-2.txt | tail -1 | grep -Eo '[0-9]+' | tail -1)"
+      - name: Sanitizer smoke ablated candidate
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          timeout 30s bash -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab" | tee /tmp/sanitizer-smoke.txt
+      - name: Validate networks and openings
+        run: |
+          sha256sum engine/src/nn-*.nnue 2>/dev/null | tee /tmp/network-sha256.txt || true
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-check.txt
+      - name: Independent full-vs-minus-EXP0021 replication
+        run: |
+          /tmp/cutechess-cli -engine name=FullStack cmd=/tmp/crab-full-stack proto=uci -engine name=MinusEXP0021 cmd=/tmp/crab-minus-exp0021 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/full-vs-minus-exp0021-replication.pgn
+          python3 tools/strength/summarize_match.py /tmp/full-vs-minus-exp0021-replication.pgn --engine FullStack --opponent MinusEXP0021 --json /tmp/full-vs-minus-exp0021-replication.json
+          cat /tmp/full-vs-minus-exp0021-replication.json
+      - name: Upload auditable replication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack0003-ablate-exp0021-replication-evidence
+          path: |
+            /tmp/*.txt
+            /tmp/*.json
+            /tmp/*.pgn
