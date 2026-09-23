@@ -1,0 +1,111 @@
+name: STACK-0003 Strength Screen
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/STACK-0003-exp0021-exp0039.patch'
+      - 'experiments/STACK-0003-exp0021-exp0039.md'
+      - '.github/workflows/stack0003-strength.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strength:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'stack/0003-exp0021-exp0039' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install runner dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
+      - name: Record provenance
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          clang++ --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          git rev-parse origin/main | tee /tmp/accepted-main-sha.txt
+          test "$(cat /tmp/accepted-main-sha.txt)" = 215afc5e736236bdb6c269a1310882780d56dfa4
+          sha256sum experiments/STACK-0003-exp0021-exp0039.patch | tee /tmp/patch-sha256.txt
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-sha256.txt
+      - name: Build accepted Crab control
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-baseline
+          printf 'uci\nisready\nquit\n' | /tmp/crab-baseline | tee /tmp/baseline-uci.txt
+          grep -q 'id name Crab Chess' /tmp/baseline-uci.txt
+          sha256sum /tmp/crab-baseline | tee /tmp/baseline-binary-sha256.txt
+          /tmp/crab-baseline bench 2>&1 | tee /tmp/baseline-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/baseline-bench.txt
+      - name: Apply stack and build candidate
+        run: |
+          git apply --check experiments/STACK-0003-exp0021-exp0039.patch
+          git apply experiments/STACK-0003-exp0021-exp0039.patch
+          git diff --check
+          test "$(git diff --name-only -- engine | tr '\n' ' ')" = 'engine/src/search.cpp '
+          git diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/engine-diff-sha256.txt
+          git add engine/src/search.cpp
+          git write-tree | tee /tmp/post-patch-tree.txt
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-candidate
+          printf 'uci\nisready\nquit\n' | /tmp/crab-candidate | tee /tmp/candidate-uci.txt
+          grep -q 'id name Crab Chess' /tmp/candidate-uci.txt
+          sha256sum /tmp/crab-candidate | tee /tmp/candidate-binary-sha256.txt
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench-1.txt
+          /tmp/crab-candidate bench 2>&1 | tee /tmp/candidate-bench-2.txt
+          grep 'Nodes searched' /tmp/candidate-bench-1.txt | tail -1 | grep -Eo '[0-9]+' | tail -1 | tee /tmp/candidate-bench-nodes.txt
+          test "$(grep 'Nodes searched' /tmp/candidate-bench-2.txt | tail -1 | grep -Eo '[0-9]+' | tail -1)" = "$(cat /tmp/candidate-bench-nodes.txt)"
+      - name: Sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          timeout 30s bash -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab" | tee /tmp/sanitizer-smoke.txt
+      - name: Build immutable Stockfish 18 control
+        run: |
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          sha256sum /tmp/sf18 | tee /tmp/sf18-binary-sha256.txt
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
+      - name: Validate networks and openings
+        run: |
+          sha256sum engine/src/nn-*.nnue /tmp/stockfish/src/nn-*.nnue 2>/dev/null | tee /tmp/network-sha256.txt || true
+          sha256sum tools/strength/openings.pgn | tee /tmp/openings-check.txt
+      - name: Stack vs accepted Crab
+        run: |
+          /tmp/cutechess-cli -engine name=CrabStack cmd=/tmp/crab-candidate proto=uci -engine name=CrabAccepted cmd=/tmp/crab-baseline proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/stack-vs-crab.pgn
+          python3 tools/strength/summarize_match.py /tmp/stack-vs-crab.pgn --engine CrabStack --opponent CrabAccepted --json /tmp/stack-vs-crab.json
+          cat /tmp/stack-vs-crab.json
+      - name: Stack vs immutable SF18
+        run: |
+          /tmp/cutechess-cli -engine name=CrabStack cmd=/tmp/crab-candidate proto=uci -engine name=Stockfish18 cmd=/tmp/sf18 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/stack-vs-sf18.pgn
+          python3 tools/strength/summarize_match.py /tmp/stack-vs-sf18.pgn --engine CrabStack --opponent Stockfish18 --json /tmp/stack-vs-sf18.json
+          cat /tmp/stack-vs-sf18.json
+      - name: Upload auditable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack0003-strength-evidence
+          path: |
+            /tmp/*.txt
+            /tmp/*.json
+            /tmp/*.pgn
