@@ -1,0 +1,74 @@
+name: CCNNv6 A0 Baseline
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/CCNNv6-SFNNv22-PLAN.md'
+      - '.github/workflows/ccnnv6-a0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'research/ccnnv6-sfnnv22' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Provenance
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          gcc --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          git rev-parse origin/main | tee /tmp/accepted-main-sha.txt
+          test "$(cat /tmp/accepted-main-sha.txt)" = 215afc5e736236bdb6c269a1310882780d56dfa4
+          sha256sum engine/src/nn-*.nnue | tee /tmp/network-sha256.txt
+      - name: Build unchanged Crab baseline
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64-avx2 COMP=gcc
+          cp engine/src/crab /tmp/crab-ccnn-a0
+          printf 'uci\nisready\nquit\n' | /tmp/crab-ccnn-a0 | tee /tmp/uci.txt
+          grep -q 'id name Crab Chess' /tmp/uci.txt
+          sha256sum /tmp/crab-ccnn-a0 | tee /tmp/binary-sha256.txt
+      - name: Deterministic bench baseline
+        run: |
+          /tmp/crab-ccnn-a0 bench 2>&1 | tee /tmp/bench-1.txt
+          /tmp/crab-ccnn-a0 bench 2>&1 | tee /tmp/bench-2.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/bench-1.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/bench-2.txt
+          test "$(grep 'Nodes searched' /tmp/bench-1.txt | tail -1)" = "$(grep 'Nodes searched' /tmp/bench-2.txt | tail -1)"
+      - name: Deterministic evaluation corpus
+        run: |
+          cat > /tmp/eval-commands.txt <<'EOF'
+          position startpos
+          eval
+          position fen r1bq1rk1/ppp2ppp/2n2n2/3pp3/8/1PN1PN2/PBPP1PPP/R2QKB1R w KQ - 4 8
+          eval
+          position fen 8/5pk1/6p1/3p4/3P4/5KP1/5P2/8 w - - 0 1
+          eval
+          quit
+          EOF
+          /tmp/crab-ccnn-a0 < /tmp/eval-commands.txt > /tmp/eval-1.txt
+          /tmp/crab-ccnn-a0 < /tmp/eval-commands.txt > /tmp/eval-2.txt
+          cmp /tmp/eval-1.txt /tmp/eval-2.txt
+          sha256sum /tmp/eval-1.txt | tee /tmp/eval-corpus-sha256.txt
+      - name: Sanitizer smoke
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean
+          make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          timeout 30s bash -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab" | tee /tmp/sanitizer.txt
+      - name: Upload A0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccnnv6-a0-baseline-evidence
+          path: /tmp/*.txt
