@@ -15,7 +15,7 @@ jobs:
   ablation:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'ablate/stack0003-remove-exp0039' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
