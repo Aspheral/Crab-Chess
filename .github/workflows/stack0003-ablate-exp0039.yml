@@ -100,6 +100,7 @@ jobs:
           sha256sum /tmp/sf18 /tmp/stockfish/src/nn-*.nnue 2>/dev/null | tee /tmp/sf18-sha256.txt || true
       - name: Direct component ablation 512 games
         run: |
+          # Replication run: protocol and engine patches intentionally unchanged.
           /tmp/cutechess-cli -engine name=FullStack cmd=/tmp/crab-full proto=uci -engine name=MinusEXP0039 cmd=/tmp/crab-minus-exp0039 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/ablate-exp0039.pgn
           python3 tools/strength/summarize_match.py /tmp/ablate-exp0039.pgn --engine FullStack --opponent MinusEXP0039 --json /tmp/ablate-exp0039.json
           cat /tmp/ablate-exp0039.json
