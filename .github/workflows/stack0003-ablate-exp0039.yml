@@ -63,7 +63,9 @@ jobs:
           test "$(grep 'Nodes searched' /tmp/full-bench-1.txt | tail -1)" = "$(grep 'Nodes searched' /tmp/full-bench-2.txt | tail -1)"
           grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2417099' /tmp/full-bench-1.txt
           sha256sum /tmp/crab-full | tee /tmp/full-binary-sha256.txt
-          git reset --hard origin/main
+          # Restore only the engine file. A hard reset to origin/main would delete
+          # this branch's ablation patch inputs before the next build step.
+          git restore --source=origin/main --staged --worktree engine/src/search.cpp
       - name: Build MinusEXP0039 control
         run: |
           git apply --check experiments/STACK-0003-ablate-exp0039.patch
