@@ -1,0 +1,115 @@
+name: STACK-0003 Ablation EXP-0039
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/STACK-0003-full.patch'
+      - 'experiments/STACK-0003-ablate-exp0039.patch'
+      - '.github/workflows/stack0003-ablate-exp0039.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ablation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'ablate/stack0003-remove-exp0039' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Install runner dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake qtbase5-dev libqt5svg5-dev
+          git clone --depth 1 --branch v1.3.1 https://github.com/cutechess/cutechess.git /tmp/cutechess-src
+          cmake -S /tmp/cutechess-src -B /tmp/cutechess-build -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
+          cmake --build /tmp/cutechess-build --target cli -j2
+          install -m755 /tmp/cutechess-build/cutechess-cli /tmp/cutechess-cli
+          git -C /tmp/cutechess-src rev-parse HEAD | tee /tmp/cutechess-runner-sha.txt
+      - name: Provenance and immutable inputs
+        run: |
+          uname -a | tee /tmp/host.txt
+          lscpu | tee -a /tmp/host.txt
+          clang++ --version | tee /tmp/compiler.txt
+          git rev-parse HEAD | tee /tmp/wrapper-sha.txt
+          git rev-parse origin/main | tee /tmp/accepted-main-sha.txt
+          test "$(cat /tmp/accepted-main-sha.txt)" = 215afc5e736236bdb6c269a1310882780d56dfa4
+          sha256sum experiments/STACK-0003-full.patch experiments/STACK-0003-ablate-exp0039.patch tools/strength/openings.pgn | tee /tmp/input-sha256.txt
+          sha256sum engine/src/nn-*.nnue | tee /tmp/crab-network-sha256.txt
+      - name: Build accepted Crab control
+        run: |
+          make clean && make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-accepted
+          printf 'uci\nisready\nquit\n' | /tmp/crab-accepted | tee /tmp/accepted-uci.txt
+          grep -q 'id name Crab Chess' /tmp/accepted-uci.txt
+          /tmp/crab-accepted bench 2>&1 | tee /tmp/accepted-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2146293' /tmp/accepted-bench.txt
+          sha256sum /tmp/crab-accepted | tee /tmp/accepted-binary-sha256.txt
+      - name: Build full STACK-0003
+        run: |
+          git apply --check experiments/STACK-0003-full.patch
+          git apply experiments/STACK-0003-full.patch
+          git diff --check
+          git diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/full-engine-diff-sha256.txt
+          git add engine/src/search.cpp && git write-tree | tee /tmp/full-post-patch-tree.txt
+          make clean && make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-full
+          printf 'uci\nisready\nquit\n' | /tmp/crab-full | tee /tmp/full-uci.txt
+          grep -q 'id name Crab Chess' /tmp/full-uci.txt
+          /tmp/crab-full bench 2>&1 | tee /tmp/full-bench-1.txt
+          /tmp/crab-full bench 2>&1 | tee /tmp/full-bench-2.txt
+          test "$(grep 'Nodes searched' /tmp/full-bench-1.txt | tail -1)" = "$(grep 'Nodes searched' /tmp/full-bench-2.txt | tail -1)"
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2417099' /tmp/full-bench-1.txt
+          sha256sum /tmp/crab-full | tee /tmp/full-binary-sha256.txt
+          # Restore only the engine file. A hard reset to origin/main would delete
+          # this branch's ablation patch inputs before the next build step.
+          git restore --source=origin/main --staged --worktree engine/src/search.cpp
+      - name: Build MinusEXP0039 control
+        run: |
+          git apply --check experiments/STACK-0003-ablate-exp0039.patch
+          git apply experiments/STACK-0003-ablate-exp0039.patch
+          git diff --check
+          git diff --binary -- engine/src/search.cpp | sha256sum | tee /tmp/minus-engine-diff-sha256.txt
+          git add engine/src/search.cpp && git write-tree | tee /tmp/minus-post-patch-tree.txt
+          make clean && make -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp engine/src/crab /tmp/crab-minus-exp0039
+          printf 'uci\nisready\nquit\n' | /tmp/crab-minus-exp0039 | tee /tmp/minus-uci.txt
+          grep -q 'id name Crab Chess' /tmp/minus-uci.txt
+          /tmp/crab-minus-exp0039 bench 2>&1 | tee /tmp/minus-bench-1.txt
+          /tmp/crab-minus-exp0039 bench 2>&1 | tee /tmp/minus-bench-2.txt
+          test "$(grep 'Nodes searched' /tmp/minus-bench-1.txt | tail -1)" = "$(grep 'Nodes searched' /tmp/minus-bench-2.txt | tail -1)"
+          sha256sum /tmp/crab-minus-exp0039 | tee /tmp/minus-binary-sha256.txt
+      - name: Sanitizer smoke MinusEXP0039
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make clean && make -j2 build ARCH=x86-64 COMP=gcc sanitize='address undefined' debug=yes
+          timeout 30s bash -c "printf 'uci\nisready\nposition startpos\ngo depth 3\nquit\n' | ./engine/src/crab" | tee /tmp/sanitizer-smoke.txt
+      - name: Build immutable Stockfish 18 control
+        run: |
+          git clone --filter=blob:none https://github.com/official-stockfish/Stockfish.git /tmp/stockfish
+          git -C /tmp/stockfish checkout --detach cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          test "$(git -C /tmp/stockfish rev-parse HEAD)" = cb3d4ee9b47d0c5aae855b12379378ea1439675c
+          make -C /tmp/stockfish/src -j2 build ARCH=x86-64-avx2 COMP=clang
+          cp /tmp/stockfish/src/stockfish /tmp/sf18
+          /tmp/sf18 bench 2>&1 | tee /tmp/sf18-bench.txt
+          grep -Eq 'Nodes searched[[:space:]]*:[[:space:]]*2050811' /tmp/sf18-bench.txt
+          sha256sum /tmp/sf18 /tmp/stockfish/src/nn-*.nnue 2>/dev/null | tee /tmp/sf18-sha256.txt || true
+      - name: Direct component ablation 512 games
+        run: |
+          # Replication run: protocol and engine patches intentionally unchanged.
+          /tmp/cutechess-cli -engine name=FullStack cmd=/tmp/crab-full proto=uci -engine name=MinusEXP0039 cmd=/tmp/crab-minus-exp0039 proto=uci -each tc=3+0.03 option.Threads=1 option.Hash=64 -openings file=tools/strength/openings.pgn format=pgn order=sequential plies=8 -games 2 -rounds 256 -repeat -concurrency 2 -pgnout /tmp/ablate-exp0039.pgn
+          python3 tools/strength/summarize_match.py /tmp/ablate-exp0039.pgn --engine FullStack --opponent MinusEXP0039 --json /tmp/ablate-exp0039.json
+          cat /tmp/ablate-exp0039.json
+      - name: Upload auditable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack0003-ablate-exp0039-evidence
+          path: |
+            /tmp/*.txt
+            /tmp/*.json
+            /tmp/*.pgn

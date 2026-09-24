@@ -1,0 +1,15 @@
+# Full STACK-0003 patch is applied first; the workflow builds MinusEXP0039 from accepted main using the EXP-0021-only patch below.
+# This file is intentionally the canonical EXP-0021-only engine delta for this ablation.
+diff --git a/engine/src/search.cpp b/engine/src/search.cpp
+--- a/engine/src/search.cpp
++++ b/engine/src/search.cpp
+@@ -1238,6 +1238,9 @@ Value Search::Worker::search(
+         // Decrease/increase reduction for moves with a good/bad history
+         r -= ss->statScore * 850 / 8192;
+ 
++        if (!capture && !is_decisive(alpha))
++            r += 3 * std::clamp(alpha - eval, -64, 96);
++
+         // Scale up reductions for expected ALL nodes
+         if (allNode)
+             r += r / (depth + 1);
